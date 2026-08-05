@@ -1,0 +1,12 @@
+{
+  "name": "gokai-proxy",
+  "version": "1.0.0",
+  "description": "GokAI - Adobe MCP koprusu + durum paneli",
+  "main": "gokai-proxy.js",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  }
+}

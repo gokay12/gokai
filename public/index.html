@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GokAI</title>
+<style>
+  :root {
+    --bg: #07090f;
+    --surface: rgba(255,255,255,.035);
+    --surface-hover: rgba(255,255,255,.055);
+    --border: rgba(255,255,255,.07);
+    --border-strong: rgba(255,255,255,.12);
+    --text: #eef1f7;
+    --muted: #7d8598;
+    --faint: #4a5163;
+    --ok: #30d98f;
+    --ok-dim: rgba(48,217,143,.12);
+    --wait: #f0a53c;
+    --wait-dim: rgba(240,165,60,.1);
+    --bad: #f4645f;
+    --bad-dim: rgba(244,100,95,.1);
+    --g1: #8b5cf6;
+    --g2: #22d3ee;
+    --radius: 20px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ---- arka plan: mesh + grain ---- */
+  .mesh {
+    position: fixed; inset: -20%;
+    background:
+      radial-gradient(42% 38% at 18% 8%,  rgba(139,92,246,.20), transparent 70%),
+      radial-gradient(38% 34% at 85% 4%,  rgba(34,211,238,.13), transparent 70%),
+      radial-gradient(50% 44% at 55% 110%, rgba(139,92,246,.08), transparent 70%);
+    filter: blur(8px);
+    animation: drift 24s ease-in-out infinite alternate;
+    pointer-events: none; z-index: 0;
+  }
+  @keyframes drift {
+    from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+    to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.04); }
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events:none; z-index: 1; opacity:.5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.028'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .app { position: relative; z-index: 2; max-width: 960px; margin: 0 auto; padding: 40px 28px 64px; }
+
+  /* ---- üst bar ---- */
+  .appbar {
+    display:flex; align-items:center; gap:16px;
+    padding: 18px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(24px);
+    animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .logo {
+    width: 46px; height: 46px; border-radius: 13px; flex:none;
+    background: linear-gradient(135deg, var(--g1), var(--g2));
+    display:grid; place-items:center;
+    box-shadow: 0 10px 30px rgba(139,92,246,.4), inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .logo svg { width: 26px; height: 26px; }
+  .brand h1 { font-size: 21px; font-weight: 800; letter-spacing: -.03em; line-height:1; }
+  .brand h1 em { font-style: normal; background: linear-gradient(90deg, var(--g1), var(--g2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .brand p { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+
+  .spacer { flex: 1; }
+
+  .health {
+    display:flex; align-items:center; gap:9px;
+    font-size: 13px; font-weight: 600;
+    padding: 9px 15px; border-radius: 100px;
+    border: 1px solid var(--border-strong);
+    background: rgba(0,0,0,.25);
+    transition: all .4s;
+    white-space: nowrap;
+  }
+  .health .hdot { width: 8px; height: 8px; border-radius: 50%; }
+  .health.ok   { color: var(--ok);   border-color: rgba(48,217,143,.35); }
+  .health.ok .hdot { background: var(--ok); animation: pulse-ok 2.2s infinite; }
+  .health.wait { color: var(--wait); border-color: rgba(240,165,60,.3); }
+  .health.wait .hdot { background: var(--wait); }
+  .health.bad  { color: var(--bad);  border-color: rgba(244,100,95,.35); }
+  .health.bad .hdot { background: var(--bad); }
+
+  .iconbtn {
+    appearance:none; border:1px solid var(--border-strong); background: rgba(0,0,0,.25);
+    width: 40px; height: 40px; border-radius: 12px; cursor: pointer;
+    display:grid; place-items:center; color: var(--muted);
+    transition: all .25s;
+  }
+  .iconbtn:hover { color: var(--text); border-color: rgba(139,92,246,.55); background: rgba(139,92,246,.12); transform: translateY(-1px); }
+  .iconbtn svg { width: 17px; height: 17px; }
+  .iconbtn.spinning svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- bölümler ---- */
+  section { margin-top: 34px; animation: rise .6s cubic-bezier(.2,.8,.2,1) both; }
+  section:nth-of-type(2) { animation-delay: .07s; }
+  .sec-title {
+    font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 14px; padding-left: 4px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .sec-title::after { content:""; flex:1; height:1px; background: linear-gradient(90deg, var(--border), transparent); }
+
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 16px; }
+
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    backdrop-filter: blur(24px);
+    transition: transform .3s cubic-bezier(.2,.8,.2,1), border-color .3s, background .3s;
+    overflow: hidden;
+  }
+  .card:hover { transform: translateY(-3px); background: var(--surface-hover); border-color: var(--border-strong); }
+  .card::before {
+    content:""; position:absolute; inset:0 0 auto 0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+  }
+  .card.ok { border-color: rgba(48,217,143,.28); }
+  .card.ok:hover { border-color: rgba(48,217,143,.45); }
+
+  .card .head { display:flex; align-items:center; gap: 13px; }
+  .tile {
+    width: 44px; height: 44px; border-radius: 11px; flex: none;
+    display:grid; place-items:center;
+    font-weight: 800; font-size: 17px; letter-spacing: -.03em;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .tile.ps  { background:#001d33; color:#31a8ff; border:1px solid rgba(49,168,255,.3); }
+  .tile.ai  { background:#2b1700; color:#ff9a00; border:1px solid rgba(255,154,0,.3); }
+  .tile.id  { background:#3b0219; color:#ff3366; border:1px solid rgba(255,51,102,.3); }
+  .tile.sys { background:#131a2c; color:#a5b4fc; border:1px solid rgba(165,180,252,.22); font-size:19px; }
+  .card .name { font-weight: 700; font-size: 15.5px; letter-spacing:-.01em; }
+  .card .kind { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  .staterow { display:flex; align-items:center; justify-content:space-between; margin-top: 18px; }
+  .state {
+    display:inline-flex; align-items:center; gap:8px;
+    font-size: 13px; font-weight: 650;
+    padding: 6px 12px; border-radius: 100px;
+  }
+  .state .dot { width: 7.5px; height: 7.5px; border-radius: 50%; }
+  .state.ok   { color: var(--ok);   background: var(--ok-dim); }
+  .state.ok .dot { background: var(--ok); animation: pulse-ok 2.2s infinite; }
+  .state.wait { color: var(--wait); background: var(--wait-dim); }
+  .state.wait .dot { background: var(--wait); animation: pulse-wait 2.6s infinite; }
+  .state.bad  { color: var(--bad);  background: var(--bad-dim); }
+  .state.bad .dot { background: var(--bad); }
+  @keyframes pulse-ok {
+    0% { box-shadow: 0 0 0 0 rgba(48,217,143,.45); } 70% { box-shadow: 0 0 0 8px rgba(48,217,143,0); } 100% { box-shadow: 0 0 0 0 rgba(48,217,143,0); }
+  }
+  @keyframes pulse-wait {
+    0% { box-shadow: 0 0 0 0 rgba(240,165,60,.35); } 70% { box-shadow: 0 0 0 7px rgba(240,165,60,0); } 100% { box-shadow: 0 0 0 0 rgba(240,165,60,0); }
+  }
+  .lastseen { color: var(--faint); font-size: 11.5px; }
+
+  .hint {
+    max-height: 0; opacity: 0; overflow: hidden;
+    transition: max-height .45s cubic-bezier(.2,.8,.2,1), opacity .35s, margin .35s;
+    margin-top: 0;
+    font-size: 12.5px; line-height: 1.65; color: #c9b58a;
+  }
+  .card.show-hint .hint { max-height: 180px; opacity: 1; margin-top: 15px; }
+  .hint .inner {
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--wait-dim); border: 1px solid rgba(240,165,60,.16);
+  }
+  .hint b { color: #ecd9ac; font-weight: 650; }
+  .meta { color: var(--faint); font-size: 12px; margin-top: 15px; line-height: 1.7; }
+
+  /* ---- alt bilgi ---- */
+  footer {
+    margin-top: 40px; display:flex; align-items:center; justify-content:space-between;
+    color: var(--faint); font-size: 12px; padding: 0 6px; flex-wrap: wrap; gap: 10px;
+  }
+  footer .l { display:flex; align-items:center; gap:8px; }
+  footer .mark { width:16px; height:16px; border-radius:5px; background: linear-gradient(135deg, var(--g1), var(--g2)); opacity:.7; }
+
+  .banner {
+    display:none; margin-top: 34px;
+    padding: 18px 22px; border-radius: var(--radius);
+    background: var(--bad-dim); border: 1px solid rgba(244,100,95,.3);
+    color: #f5b8b5; font-size: 13.5px; line-height: 1.7;
+    animation: rise .4s both;
+  }
+  .banner b { color: #ffd9d7; }
+  body.proxy-down .banner { display: block; }
+  body.proxy-down .grid, body.proxy-down .sec-title { opacity: .35; filter: saturate(.4); pointer-events: none; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 640px) {
+    .app { padding: 20px 14px 40px; }
+    .appbar { flex-wrap: wrap; }
+    .health { order: 3; width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="mesh"></div>
+<div class="grain"></div>
+
+<div class="app">
+  <div class="appbar">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M12 3a9 9 0 1 0 9 9h-4.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+        <circle cx="16.5" cy="12" r="2.1" fill="#fff"/>
+      </svg>
+    </div>
+    <div class="brand">
+      <h1>Gok<em>AI</em></h1>
+      <p>Adobe MCP Köprüsü</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="health bad" id="health"><span class="hdot"></span><span id="health-text">Bağlanılıyor…</span></div>
+    <button class="iconbtn" id="restart" title="Proxy'yi yeniden başlat" onclick="restartProxy()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="banner">
+    <b>GokAI servisine ulaşılamıyor.</b><br>
+    Bilgisayarı yeniden başlatmak genellikle çözer — servis otomatik açılır.
+    Düzelmezse kurulumu yapan kişiye bu ekranın görüntüsünü gönderin.
+  </div>
+
+  <section>
+    <div class="sec-title">Adobe Uygulamaları</div>
+    <div class="grid">
+      <div class="card" data-app="photoshop">
+        <div class="head">
+          <div class="tile ps">Ps</div>
+          <div><div class="name">Photoshop</div><div class="kind">MCP Agent eklentisi</div></div>
+        </div>
+        <div class="staterow">
+          <span class="state wait"><span class="dot"></span><span class="txt">Bekleniyor</span></span>
+          <span class="lastseen"></span>
+        </div>
+        <div class="hint"><div class="inner">
+          Photoshop'u açın → <b>Eklentiler › Photoshop MCP Agent</b> → <b>Connect</b>.
+          Paneldeki <b>Connect on Launch</b> işaretliyse bu adım otomatiktir.
+        </div></div>
+      </div>
+
+      <div class="card" data-app="illustrator">
+        <div class="head">
+          <div class="tile ai">Ai</div>
+          <div><div class="name">Illustrator</div><div class="kind">MCP Agent eklentisi</div></div>
+        </div>
+        <div class="staterow">
+          <span class="state wait"><span class="dot"></span><span class="txt">Bekleniyor</span></span>
+          <span class="lastseen"></span>
+        </div>
+        <div class="hint"><div class="inner">
+          Illustrator'da <b>önce bir dosya açın</b> →
+          <b>Pencere › Uzantılar › Illustrator MCP Agent</b> → <b>Connect</b>.
+        </div></div>
+      </div>
+
+      <div class="card" data-app="indesign">
+        <div class="head">
+          <div class="tile id">Id</div>
+          <div><div class="name">InDesign</div><div class="kind">MCP Agent eklentisi</div></div>
+        </div>
+        <div class="staterow">
+          <span class="state wait"><span class="dot"></span><span class="txt">Bekleniyor</span></span>
+          <span class="lastseen"></span>
+        </div>
+        <div class="hint"><div class="inner">
+          InDesign'ı açın → <b>Eklentiler › InDesign MCP Agent</b> → <b>Connect</b>.
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-title">Sistem</div>
+    <div class="grid">
+      <div class="card" id="card-proxy">
+        <div class="head">
+          <div class="tile sys">⇄</div>
+          <div><div class="name">GokAI Servisi</div><div class="kind">Arka plan köprüsü</div></div>
+        </div>
+        <div class="staterow">
+          <span class="state bad" id="st-proxy"><span class="dot"></span><span class="txt">Kontrol ediliyor…</span></span>
+        </div>
+        <div class="meta" id="meta-proxy">—</div>
+      </div>
+
+      <div class="card" id="card-claude">
+        <div class="head">
+          <div class="tile sys">✳</div>
+          <div><div class="name">Claude Desktop</div><div class="kind">MCP yapılandırması</div></div>
+        </div>
+        <div class="staterow">
+          <span class="state bad" id="st-claude"><span class="dot"></span><span class="txt">Kontrol ediliyor…</span></span>
+        </div>
+        <div class="hint" id="hint-claude"><div class="inner">
+          Yapılandırma eksik. <b>GokAI kurulumunu</b> yeniden çalıştırın
+          veya kurulumu yapan kişiye ulaşın. Sonrasında Claude Desktop'ı
+          <b>Cmd+Q ile tamamen kapatıp</b> açmayı unutmayın.
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="l"><span class="mark"></span> GokAI <span id="ver">v—</span></div>
+    <div>canlı · her 2 saniyede yenilenir</div>
+  </footer>
+</div>
+
+<script>
+const APPS = ["photoshop", "illustrator", "indesign"];
+
+function rel(ts) {
+  if (!ts) return "";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5) return "şimdi";
+  if (s < 60) return s + " sn önce";
+  if (s < 3600) return Math.floor(s/60) + " dk önce";
+  return Math.floor(s/3600) + " sa önce";
+}
+function fmtUptime(s) {
+  if (s < 60) return s + " sn";
+  if (s < 3600) return Math.floor(s/60) + " dk";
+  return Math.floor(s/3600) + " sa " + Math.floor((s%3600)/60) + " dk";
+}
+function setState(el, cls, text) {
+  el.className = "state " + cls;
+  el.querySelector(".txt").textContent = text;
+}
+function setHealth(cls, text) {
+  const h = document.getElementById("health");
+  h.className = "health " + cls;
+  document.getElementById("health-text").textContent = text;
+}
+
+async function tick() {
+  try {
+    const r = await fetch("/status", { cache: "no-store" });
+    const s = await r.json();
+    document.body.classList.remove("proxy-down");
+
+    // servis kartı
+    setState(document.getElementById("st-proxy"), "ok", "Çalışıyor");
+    document.getElementById("card-proxy").classList.add("ok");
+    document.getElementById("meta-proxy").innerHTML =
+      "Port <b>" + s.port + "</b> · çalışma süresi " + fmtUptime(s.uptimeSec);
+    document.getElementById("ver").textContent = "v" + s.version;
+
+    // claude kartı
+    const stC = document.getElementById("st-claude");
+    const cardC = document.getElementById("card-claude");
+    let claudeOk = false;
+    if (s.claude.found) {
+      const vals = Object.values(s.claude.entries);
+      const okCount = vals.filter(Boolean).length;
+      claudeOk = okCount === vals.length && vals.length > 0;
+      if (claudeOk) {
+        setState(stC, "ok", "Hazır · " + okCount + "/" + vals.length);
+        cardC.classList.add("ok"); cardC.classList.remove("show-hint");
+      } else {
+        setState(stC, "wait", "Eksik · " + okCount + "/" + vals.length);
+        cardC.classList.remove("ok"); cardC.classList.add("show-hint");
+      }
+    } else {
+      setState(stC, "bad", "Config yok");
+      cardC.classList.remove("ok"); cardC.classList.add("show-hint");
+    }
+
+    // uygulama kartları
+    let connected = 0;
+    for (const name of APPS) {
+      const card = document.querySelector('[data-app="' + name + '"]');
+      const st = card.querySelector(".state");
+      const ls = card.querySelector(".lastseen");
+      const a = s.apps[name];
+      if (a && a.connected) {
+        connected++;
+        setState(st, "ok", "Bağlı");
+        ls.textContent = "";
+        card.classList.add("ok"); card.classList.remove("show-hint");
+      } else {
+        setState(st, "wait", "Bekleniyor");
+        ls.textContent = a && a.lastSeen ? "son: " + rel(a.lastSeen) : "";
+        card.classList.remove("ok"); card.classList.add("show-hint");
+      }
+    }
+
+    // genel sağlık
+    if (connected === APPS.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
+    else if (connected > 0) setHealth("ok", connected + "/" + APPS.length + " uygulama bağlı");
+    else setHealth("wait", "Uygulama bekleniyor");
+  } catch (e) {
+    document.body.classList.add("proxy-down");
+    setHealth("bad", "Servis kapalı");
+    setState(document.getElementById("st-proxy"), "bad", "Ulaşılamıyor");
+    document.getElementById("card-proxy").classList.remove("ok");
+  }
+}
+
+async function restartProxy() {
+  const btn = document.getElementById("restart");
+  btn.classList.add("spinning");
+  try { await fetch("/restart", { method: "POST" }); } catch (e) {}
+  setTimeout(() => { btn.classList.remove("spinning"); tick(); }, 2600);
+}
+
+tick();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>
