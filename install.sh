@@ -3,7 +3,7 @@
 # GokAI Kurulum — Adobe MCP köprüsü (Photoshop / Illustrator / InDesign)
 #
 # Kullanım (arkadaşların çalıştıracağı tek satır):
-#   curl -fsSL https://raw.githubusercontent.com/GITHUB_KULLANICI/gokai/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bash
 #
 # Ne yapar:
 #   1. Kendi özel Node.js kopyasını indirir (sisteme dokunmaz, sudo istemez)
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------- ayarlar ---
-GOKAI_REPO_TARBALL="${GOKAI_REPO_TARBALL:-https://codeload.github.com/GITHUB_KULLANICI/gokai/tar.gz/refs/heads/main}"
+GOKAI_REPO_TARBALL="${GOKAI_REPO_TARBALL:-https://codeload.github.com/gokay12/gokai/tar.gz/refs/heads/main}"
 ADB_MCP_TARBALL="https://codeload.github.com/mikechambers/adb-mcp/tar.gz/refs/heads/main"
 NODE_VERSION="v22.14.0"
 GOKAI_DIR="$HOME/Library/Application Support/GokAI"

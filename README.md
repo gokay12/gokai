@@ -16,11 +16,11 @@ entegrasyonunu tek komutla kuran sistem.
 
 1. GitHub'da `gokai` adında bir repo aç (public).
 2. Bu klasördeki dosyaları push et.
-3. `install.sh` içindeki `GITHUB_KULLANICI` yer tutucusunu kendi kullanıcı adınla değiştir (2 yerde: en üstteki yorum + `GOKAI_REPO_TARBALL`).
+3. `install.sh` içindeki `gokay12` yer tutucusunu kendi kullanıcı adınla değiştir (2 yerde: en üstteki yorum + `GOKAI_REPO_TARBALL`).
 4. Arkadaşlarına şu tek satırı gönder:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/KULLANICI_ADIN/gokai/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bash
 ```
 
 ## Kurulumdan sonra (her makinede)
