@@ -57,3 +57,19 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bas
 - Photoshop/InDesign UXP eklentileri `.ccx` olarak kurulmadıysa (UXP Developer
   Tools ile yüklendiyse) her uygulama açılışında yeniden yüklenmeleri gerekir.
 - Proxy portu sabit: 3001.
+
+## Teşekkürler & Lisanslar
+
+GokAI, iki harika açık kaynak projenin üzerine kurulmuş bir kurulum/panel katmanıdır —
+asıl işi yapan onlar:
+
+- **[adb-mcp](https://github.com/mikechambers/adb-mcp)** — Mike Chambers (MIT).
+  Photoshop / Illustrator / InDesign MCP sunucuları ve UXP/CEP eklentileri.
+  `gokai-proxy.js` içindeki proxy protokolü bu projenin `adb-proxy-socket`
+  bileşeninden türetilmiştir; orijinal lisans bildirimi dosyada korunmaktadır.
+  Kurulum sırasında proje kaynak kodu GitHub'dan indirilir.
+- **[photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp)** — Ali Sait Teke (MIT).
+  Eklentisiz, AppleScript tabanlı 89 araçlı Photoshop MCP sunucusu
+  (`@alisaitteke/photoshop-mcp` npm paketi olarak çalıştırılır, bu repoda kodu yer almaz).
+
+Bu repo MIT lisanslıdır — bkz. [LICENSE](LICENSE).
