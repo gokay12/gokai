@@ -92,6 +92,24 @@ tar -xzf "$GOKAI_DIR/adb-mcp.tar.gz" -C "$ADB_DIR" --strip-components=1
 rm "$GOKAI_DIR/adb-mcp.tar.gz"
 ok "adb-mcp hazır: $ADB_DIR"
 
+# adb-mcp hata düzeltmesi: InDesign manifest'inde network.domains bir dizi
+# ("all" bir dizi elemanı olarak) yazılmış. UXP bunu geçerli saymıyor ve eklenti
+# proxy'ye bağlanamadan "Connection error: timeout" veriyor. Photoshop'taki
+# doğru biçim düz string ("all"). Upstream düzelirse bu blok zararsızca no-op olur.
+"$NODE_DIR/bin/node" -e '
+const fs = require("fs");
+const p = process.argv[1];
+try {
+  const m = JSON.parse(fs.readFileSync(p, "utf8"));
+  const net = m.requiredPermissions && m.requiredPermissions.network;
+  if (net && Array.isArray(net.domains)) {
+    net.domains = "all";
+    fs.writeFileSync(p, JSON.stringify(m, null, 2));
+    console.log("  \x1b[32m✓\x1b[0m InDesign manifest ağ izni düzeltildi");
+  }
+} catch (e) {}
+' "$ADB_DIR/uxp/id/manifest.json"
+
 # --------------------------------------------------------- 4. GokAI proxy ---
 step "4/6 GokAI proxy + durum paneli kuruluyor"
 PROXY_DIR="$GOKAI_DIR/proxy"

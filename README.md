@@ -44,12 +44,39 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bas
 > Paketin yeni sürümlerinde `mcp.server.fastmcp` modülü kaldırıldığı için
 > pin olmadan sunucular açılmaz. Kaldırma!
 
+## UXP/CEP eklenti kurulumu (senin yapacakların — her makinede)
+
+Kurulum betiği MCP sunucularını ve proxy'yi halleder; Adobe eklentileri elle kurulur.
+
+**Illustrator (CEP)** — betik bunu otomatik yapar, sadece Illustrator'ı yeniden başlat:
+`~/Library/Application Support/Adobe/CEP/extensions` içine sembolik bağ + `PlayerDebugMode`.
+Panel: **Pencere › Uzantılar › Illustrator MCP Agent** (önce bir dosya açık olmalı).
+
+**Photoshop / InDesign (UXP)** — UXP Developer Tools ile:
+1. Photoshop/InDesign'da **Ayarlar › Eklentiler › Geliştirici Modunu Etkinleştir** → uygulamayı yeniden başlat
+2. UXP Developer Tools → **Add Plugin** →
+   `~/Library/Application Support/GokAI/adb-mcp/uxp/ps/manifest.json` (ve `.../id/manifest.json`)
+3. **Load** → uygulamada **Eklentiler › … MCP Agent** panelini aç → **Connect**
+4. Panelde **Connect on Launch**'ı işaretle
+
+> **Sıra önemli:** Panel, UDT'den `Load` yapılmadan *önce* açıldıysa Connect yanıt vermez.
+> Önce Load, sonra paneli aç.
+
+> **Dikkat:** UXP eklentileri `.ccx` olarak kurulmadıkça uygulama her yeniden
+> başladığında UDT'den tekrar `Load` edilmelidir.
+
 ## Sorun giderme
 
 - **Panel açılmıyor** → Bilgisayarı yeniden başlat (launchd proxy'yi otomatik başlatır).
   Log: `~/Library/Logs/gokai-proxy.error.log`
 - **Kart "Bekleniyor"da kalıyor** → İlgili Adobe uygulamasında eklenti paneli açık mı,
   Connect'e basılmış mı? (Illustrator'da önce bir dosya açık olmalı.)
+- **Connect'e basınca hiçbir şey olmuyor** → Panel, UDT'den `Load` yapılmadan önce
+  açılmış demektir. Paneli kapat, UDT'de `Load` durumunu doğrula, paneli yeniden aç.
+- **`Connection error: timeout`** (UDT › Debug › Console) → Eklenti manifest'inde
+  ağ izni hatalı. Kurulum betiği InDesign için bunu otomatik düzeltir; başka bir
+  uygulamada görülürse `requiredPermissions.network.domains` değeri `"all"`
+  (dizi değil, düz string) olmalı.
 - **Claude araçları görmüyor** → Claude Desktop Cmd+Q ile tamamen kapatılıp açıldı mı?
 
 ## Bilinen sınırlar
