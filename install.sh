@@ -12,10 +12,11 @@
 #   4. GokAI proxy'yi kurar ve oturum açılışında otomatik başlatır (launchd)
 #   5. Claude Desktop yapılandırmasına MCP sunucularını ekler (mevcut ayarları BOZMAZ)
 #   6. Illustrator CEP eklentisini kurar (kalıcı)
-#   7. Photoshop UXP eklentisini .ccx olarak kurar (kalıcı; Beta hariç)
+#   7. Photoshop UXP eklentisini .ccx olarak kurar (Beta makinelerde atlanır)
 #   8. ~/Applications içine GokAI.app kısayolu koyar (durum panelini açar)
 #
-# Not: Photoshop Beta kullanılıyorsa .ccx kurulumu çalışmaz, eklenti elle yüklenir.
+# Photoshop Beta olan makinelerde UXP eklentisi kurulamaz; betik bunu algılar ve
+# yalnızca AppleScript tabanlı sunucuyu ekler (Beta'da 90 araçla tam çalışır).
 
 set -euo pipefail
 
@@ -35,6 +36,7 @@ bold() { printf "\033[1m%s\033[0m\n" "$1"; }
 step() { printf "\n\033[1;35m[GokAI]\033[0m \033[1m%s\033[0m\n" "$1"; }
 ok()   { printf "  \033[32m✓\033[0m %s\n" "$1"; }
 warn() { printf "  \033[33m!\033[0m %s\n" "$1"; }
+skip() { printf "  \033[90m·\033[0m %s\n" "$1"; }
 
 bold ""
 bold "  ██████╗  ██████╗ ██╗  ██╗ █████╗ ██╗"
@@ -150,7 +152,15 @@ ok "Arka plan servisi kuruldu (oturum açılışında otomatik başlar)"
 step "5/8 Claude Desktop yapılandırılıyor"
 [ -f "$CLAUDE_CONFIG" ] && cp "$CLAUDE_CONFIG" "$CLAUDE_CONFIG.gokai-backup-$(date +%Y%m%d%H%M%S)"
 
-GOKAI_DIR="$GOKAI_DIR" UV_BIN="$UV_BIN" CLAUDE_CONFIG="$CLAUDE_CONFIG" \
+# Normal (Beta olmayan) Photoshop var mı? Yoksa UXP eklentisi kurulamaz, dolayısıyla
+# ona bağlı MCP sunucusunu hiç ekleme — Claude'da hiç bağlanmayan bir sunucu görünmesin.
+HAS_STABLE_PS=0
+for d in /Applications/Adobe\ Photoshop*; do
+  case "$d" in *"(Beta)"*) ;; *) [ -d "$d" ] && HAS_STABLE_PS=1 ;; esac
+done
+[ "$HAS_STABLE_PS" -eq 1 ] || warn "Sadece Photoshop Beta bulundu — UXP tabanlı sunucu atlanıyor (AppleScript sunucusu Beta'da tam çalışır)"
+
+GOKAI_DIR="$GOKAI_DIR" UV_BIN="$UV_BIN" CLAUDE_CONFIG="$CLAUDE_CONFIG" HAS_STABLE_PS="$HAS_STABLE_PS" \
 "$NODE_DIR/bin/node" <<'MERGE_EOF'
 const fs = require("fs");
 const path = require("path");
@@ -181,14 +191,29 @@ const entries = {
     args: ["-y", "@alisaitteke/photoshop-mcp"],
     env: { LOG_LEVEL: "1", PATH: `${nodeBin}:/usr/bin:/bin` },
   },
-  "GokAI Photoshop Plugin": { command: uvBin, args: adbArgs("ps-mcp.py") },
   "GokAI Illustrator":      { command: uvBin, args: adbArgs("ai-mcp.py") },
 };
+
+// UXP eklentisi yalnızca normal Photoshop'ta kurulabiliyor; Beta-only makinelerde
+// bu sunucu asla bağlanamaz, o yüzden hiç eklenmiyor.
+if (process.env.HAS_STABLE_PS === "1") {
+  entries["GokAI Photoshop Plugin"] = { command: uvBin, args: adbArgs("ps-mcp.py") };
+}
 
 let cfg = {};
 try { cfg = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch (e) {}
 cfg.mcpServers = cfg.mcpServers || {};
-Object.assign(cfg.mcpServers, entries); // sadece GokAI anahtarları; diğerleri korunur
+
+// Bu çalıştırmada eklenmeyen eski GokAI girdilerini temizle. Örn. makinede
+// normal Photoshop varken kurulmuş, sonra sadece Beta kalmışsa "GokAI Photoshop
+// Plugin" girdisi ortada kalır ve Claude'da hiç bağlanmayan bir sunucu görünür.
+for (const name of Object.keys(cfg.mcpServers)) {
+  if (name.startsWith("GokAI ") && !(name in entries)) {
+    delete cfg.mcpServers[name];
+    console.log(`  \x1b[33m!\x1b[0m eski girdi kaldırıldı: ${name}`);
+  }
+}
+Object.assign(cfg.mcpServers, entries); // GokAI anahtarları; diğerleri korunur
 
 fs.mkdirSync(path.dirname(configPath), { recursive: true });
 fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
@@ -197,7 +222,8 @@ MERGE_EOF
 
 # Python ortamlarını önceden ısıt (ilk Claude açılışı yavaş olmasın)
 INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"gokai-warmup","version":"1.0"}}}'
-for f in ps-mcp.py ai-mcp.py; do
+WARM="ai-mcp.py"; [ "$HAS_STABLE_PS" -eq 1 ] && WARM="ps-mcp.py ai-mcp.py"
+for f in $WARM; do
   echo "$INIT" | "$UV_BIN" run \
     --with fonttools --with "mcp[cli]==1.5.0" --with numpy --with pillow \
     --with python-socketio --with requests --with websocket-client \
@@ -235,7 +261,10 @@ UXP_EXTERNAL="$HOME/Library/Application Support/Adobe/UXP/Plugins/External"
 
 ps_plugin_installed() { ls "$UXP_EXTERNAL" 2>/dev/null | grep -qi "Photoshop MCP Agent"; }
 
-if [ ! -x "$UPIA" ]; then
+if [ "$HAS_STABLE_PS" -eq 0 ]; then
+  skip_ccx=1
+  warn "Photoshop Beta — .ccx kurulumu atlandı (AppleScript sunucusu eklenti istemez)"
+elif [ ! -x "$UPIA" ]; then
   warn "Adobe eklenti kurucusu bulunamadı — Photoshop eklentisi elle kurulmalı"
 elif pgrep -f "Adobe Photoshop [0-9]" >/dev/null 2>&1; then
   warn "Photoshop açık — eklenti kurulamadı. Photoshop'u kapatıp kurulumu tekrar çalıştırın."
@@ -283,8 +312,12 @@ printf "\n\033[1;32mKurulum tamamlandı!\033[0m\n\n"
 echo "Sonraki adımlar:"
 echo "  1. Claude Desktop'ı TAMAMEN kapatıp yeniden açın (Cmd+Q)"
 echo "  2. Illustrator: yeniden başlat → Pencere › Uzantılar › Illustrator MCP Agent → Connect"
-echo "  3. Photoshop: yeniden başlat → Eklentiler › Photoshop MCP Agent → Connect"
-echo "     (yukarıda sarı uyarı çıktıysa eklenti elle kurulmalı)"
+if [ "$HAS_STABLE_PS" -eq 1 ]; then
+  echo "  3. Photoshop: yeniden başlat → Eklentiler › Photoshop MCP Agent → Connect"
+  echo "     (7/8 adımında sarı uyarı çıktıysa eklenti elle kurulmalı)"
+else
+  echo "  3. Photoshop: yapacak bir şey yok — Beta'da eklentisiz çalışır"
+fi
 echo "  4. Durum paneli: GokAI.app  →  http://localhost:3001"
 echo ""
 open "http://localhost:3001" 2>/dev/null || true

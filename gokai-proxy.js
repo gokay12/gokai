@@ -122,25 +122,31 @@ const CLAUDE_CONFIG_PATH = path.join(
     "Library/Application Support/Claude/claude_desktop_config.json"
 );
 
-// install.sh'in yazdığı girdi adları — değişirse ikisini birden güncelle
-const GOKAI_CONFIG_KEYS = [
-    "GokAI Photoshop",
-    "GokAI Photoshop Plugin",
-    "GokAI Illustrator",
-];
+// Her makinede aynı sunucular olmayabilir: Photoshop Beta'da UXP eklentisi
+// kurulamadığı için "GokAI Photoshop Plugin" hiç eklenmez. Bu yüzden sabit bir
+// liste beklemek yerine yapılandırmada NE VARSA onu bildiriyoruz; panel de
+// gösterilecek kartları buna göre belirliyor.
+const GOKAI_CORE_KEYS = ["GokAI Photoshop", "GokAI Illustrator"];
 
 function readClaudeConfigStatus() {
     try {
         const raw = fs.readFileSync(CLAUDE_CONFIG_PATH, "utf8");
         const cfg = JSON.parse(raw);
         const servers = cfg.mcpServers || {};
+        const present = Object.keys(servers).filter((k) => k.startsWith("GokAI "));
         const entries = {};
-        for (const key of GOKAI_CONFIG_KEYS) {
+        for (const key of GOKAI_CORE_KEYS) {
             entries[key] = Object.prototype.hasOwnProperty.call(servers, key);
         }
-        return { found: true, entries };
+        return {
+            found: true,
+            entries,                                        // çekirdek sunucular
+            present,                                        // bu makinede kurulu olanlar
+            photoshopPlugin: present.includes("GokAI Photoshop Plugin"),
+        };
     } catch (e) {
-        return { found: false, entries: {}, error: e.code || String(e) };
+        return { found: false, entries: {}, present: [], photoshopPlugin: false,
+                 error: e.code || String(e) };
     }
 }
 

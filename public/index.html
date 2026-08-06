@@ -320,6 +320,9 @@
 
 <script>
 const APPS = ["photoshop", "illustrator"];
+// Photoshop kartı yalnızca UXP eklenti sunucusu kuruluysa anlamlı.
+// Beta makinelerde eklenti kurulamaz; kart sonsuza dek "Bekleniyor"da kalmasın.
+let activeApps = APPS;
 
 function rel(ts) {
   if (!ts) return "";
@@ -377,9 +380,18 @@ async function tick() {
       cardC.classList.remove("ok"); cardC.classList.add("show-hint");
     }
 
+    // Beta makinede Photoshop eklentisi yok → kartı gizle
+    activeApps = s.claude.photoshopPlugin === false
+      ? APPS.filter((a) => a !== "photoshop")
+      : APPS;
+    for (const name of APPS) {
+      const c = document.querySelector('[data-app="' + name + '"]');
+      if (c) c.style.display = activeApps.includes(name) ? "" : "none";
+    }
+
     // uygulama kartları
     let connected = 0;
-    for (const name of APPS) {
+    for (const name of activeApps) {
       const card = document.querySelector('[data-app="' + name + '"]');
       const st = card.querySelector(".state");
       const ls = card.querySelector(".lastseen");
@@ -397,8 +409,8 @@ async function tick() {
     }
 
     // genel sağlık
-    if (connected === APPS.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
-    else if (connected > 0) setHealth("ok", connected + "/" + APPS.length + " uygulama bağlı");
+    if (connected === activeApps.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
+    else if (connected > 0) setHealth("ok", connected + "/" + activeApps.length + " uygulama bağlı");
     else setHealth("wait", "Uygulama bekleniyor");
   } catch (e) {
     document.body.classList.add("proxy-down");

@@ -54,6 +54,25 @@ CEP/UXP eklentilerin (AtomX vb.), GokAI ile ilgisi olmayan MCP sunucuların,
 yapılandırma yedekleri. Adobe uygulamaları veya Claude açıksa çalışmayı reddeder
 (zorlamak için `--force`).
 
+## Photoshop Beta olan makineler
+
+Betik bunu **kendisi algılar** — yapman gereken bir şey yok, aynı komutu çalıştır.
+
+Adobe, Beta sürümünü geçerli eklenti hedefi saymadığı için UXP eklentisi
+kurulamaz. Betik bu durumda:
+- `.ccx` kurulum adımını atlar
+- UXP tabanlı `GokAI Photoshop Plugin` sunucusunu Claude'a **hiç eklemez**
+  (varsa eski girdiyi de siler)
+- Panelde Photoshop kartını gizler
+
+Photoshop yine tam çalışır: **GokAI Photoshop** sunucusu AppleScript kullanır,
+eklenti ve proxy istemez. Photoshop Beta 27.10 üzerinde doğrulandı —
+`photoshop_ping` → *"Successfully connected"*, **90 araç** kullanılabilir
+(katman/maske/seçim, filtreler, Generative Fill, 15 hazır tarif, `get_preview`).
+
+Yani Beta makinelerde **UXP Developer Tools, `.ccx`, Developer Mode ve Connect
+butonu — hiçbiri gerekmiyor.**
+
 ## Kurulumdan sonra (her makinede)
 
 - Claude Desktop **tamamen** kapatılıp açılmalı (Cmd+Q).
