@@ -191,8 +191,12 @@ const adbMcp = path.join(gokaiDir, "adb-mcp", "mcp");
 
 // mcp[cli] SABİTLENMELİ: yeni sürümlerde fastmcp modülü kaldırıldı,
 // pin olmadan adb-mcp sunucuları ModuleNotFoundError ile çöker.
+// --python ZORUNLU: bayrak olmadan uv sistemdeki Python'u seçiyor. macOS 3.9.6
+// ile geliyor, adb-mcp ise >=3.10 istiyor → "No solution found" ile çöküyor.
+// Bayrakla uv gerekli sürümü kendisi indiriyor.
 const adbArgs = (script) => [
   "run",
+  "--python", "3.12",
   "--with", "fonttools",
   "--with", "mcp[cli]==1.5.0",
   "--with", "numpy",
@@ -242,7 +246,7 @@ MERGE_EOF
 INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"gokai-warmup","version":"1.0"}}}'
 WARM="ai-mcp.py"; [ "$HAS_STABLE_PS" -eq 1 ] && WARM="ps-mcp.py ai-mcp.py"
 for f in $WARM; do
-  echo "$INIT" | "$UV_BIN" run \
+  echo "$INIT" | "$UV_BIN" run --python 3.12 \
     --with fonttools --with "mcp[cli]==1.5.0" --with numpy --with pillow \
     --with python-socketio --with requests --with websocket-client \
     mcp run "$GOKAI_DIR/adb-mcp/mcp/$f" >/dev/null 2>&1 \

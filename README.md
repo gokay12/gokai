@@ -105,9 +105,13 @@ eklentilerin (AtomX vb.), GokAI dışındaki MCP sunucuların, yapılandırma ye
 | GokAI Photoshop Plugin | adb-mcp `ps-mcp.py` | UXP eklentisi + proxy gerekir — **Beta makinelerde eklenmez** |
 | GokAI Illustrator | adb-mcp `ai-mcp.py` | CEP eklentisi + proxy gerekir |
 
-> **Önemli:** adb-mcp girdilerindeki `mcp[cli]==1.5.0` sabitlemesi bilinçli.
-> Paketin yeni sürümlerinde `mcp.server.fastmcp` modülü kaldırıldığı için
-> pin olmadan sunucular `ModuleNotFoundError` ile açılmaz. Kaldırma.
+> **Önemli — iki ayar bilinçli, kaldırma:**
+> - `mcp[cli]==1.5.0` sabitlemesi: yeni sürümlerde `mcp.server.fastmcp` modülü
+>   kaldırıldığı için pin olmadan sunucular `ModuleNotFoundError` ile açılmaz.
+> - `--python 3.12` bayrağı: bayrak olmadan `uv` sistemdeki Python'u seçiyor.
+>   macOS 3.9.6 ile geliyor, adb-mcp ise >=3.10 istiyor →
+>   *"No solution found ... does not satisfy Python>=3.10"* hatası. Bayrakla uv
+>   gerekli sürümü kendisi indiriyor.
 
 ## Sorun giderme
 
@@ -121,6 +125,8 @@ eklentilerin (AtomX vb.), GokAI dışındaki MCP sunucuların, yapılandırma ye
 - **Kurulum "Photoshop açık" / "Claude Desktop açık" diyor** → İlgili uygulamayı
   kapatıp betiği tekrar çalıştır. Bu kontrol bilinçli: açık uygulamalar kurulumu
   sessizce geri alabiliyor.
+- **Log'da `does not satisfy Python>=3.10`** → Eski sürümle kurulmuş.
+  `reset.sh ... --install` ile yeniden kur (düzeltme `--python 3.12` bayrağında).
 - **Kurulum başarılı görünüyor ama Claude sunucuları görmüyor** → Kurulum sırasında
   Claude Desktop açık mıydı? Açıksa yapılandırmayı geri yazmış olabilir; Claude'u
   Cmd+Q ile kapatıp kurulumu tekrar çalıştır.
