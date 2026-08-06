@@ -107,6 +107,18 @@
   .iconbtn.spinning svg { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ---- kişisel selamlama ---- */
+  .hero { margin: 30px 0 4px; padding-left: 4px; animation: rise .55s cubic-bezier(.2,.8,.2,1) both; animation-delay:.04s; }
+  .hero h2 {
+    font-size: 30px; font-weight: 750; letter-spacing: -.035em; line-height: 1.15;
+  }
+  .hero h2 .nm {
+    background: linear-gradient(90deg, var(--g1), var(--g2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { color: var(--muted); font-size: 14px; margin-top: 7px; }
+  @media (max-width: 640px) { .hero h2 { font-size: 24px; } }
+
   /* ---- bölümler ---- */
   section { margin-top: 34px; animation: rise .6s cubic-bezier(.2,.8,.2,1) both; }
   section:nth-of-type(2) { animation-delay: .07s; }
@@ -239,6 +251,11 @@
     </button>
   </div>
 
+  <div class="hero">
+    <h2 id="greeting">Merhaba</h2>
+    <p id="greeting-sub">Bağlanılıyor…</p>
+  </div>
+
   <div class="banner">
     <b>GokAI servisine ulaşılamıyor.</b><br>
     Bilgisayarı yeniden başlatmak genellikle çözer — servis otomatik açılır.
@@ -341,6 +358,26 @@ function setState(el, cls, text) {
   el.className = "state " + cls;
   el.querySelector(".txt").textContent = text;
 }
+// Selamlamayı tarayıcı saatine göre seç — makinenin yerel saati esas alınır.
+function greetingFor(h) {
+  if (h >= 5  && h < 11) return "Günaydın";
+  if (h >= 11 && h < 18) return "Merhaba";
+  if (h >= 18 && h < 22) return "İyi akşamlar";
+  return "İyi geceler";
+}
+
+function renderGreeting(owner, connected, total, claudeOk) {
+  const g = greetingFor(new Date().getHours());
+  document.getElementById("greeting").innerHTML =
+    owner ? g + ', <span class="nm">' + owner + "</span>" : g;
+
+  const sub = document.getElementById("greeting-sub");
+  if (total === 0)            sub.textContent = "Adobe uygulaması yapılandırılmamış.";
+  else if (connected === total && claudeOk) sub.textContent = "Her şey hazır — Claude ile çalışmaya başlayabilirsin.";
+  else if (connected > 0)     sub.textContent = total - connected + " uygulama bağlantı bekliyor.";
+  else                        sub.textContent = "Adobe uygulamalarını açıp Connect'e bas.";
+}
+
 function setHealth(cls, text) {
   const h = document.getElementById("health");
   h.className = "health " + cls;
@@ -409,11 +446,15 @@ async function tick() {
     }
 
     // genel sağlık
+    renderGreeting(s.owner, connected, activeApps.length, claudeOk);
+
     if (connected === activeApps.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
     else if (connected > 0) setHealth("ok", connected + "/" + activeApps.length + " uygulama bağlı");
     else setHealth("wait", "Uygulama bekleniyor");
   } catch (e) {
     document.body.classList.add("proxy-down");
+    document.getElementById("greeting").textContent = greetingFor(new Date().getHours());
+    document.getElementById("greeting-sub").textContent = "GokAI servisine ulaşılamıyor.";
     setHealth("bad", "Servis kapalı");
     setState(document.getElementById("st-proxy"), "bad", "Ulaşılamıyor");
     document.getElementById("card-proxy").classList.remove("ok");

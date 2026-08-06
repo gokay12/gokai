@@ -48,7 +48,22 @@ const io = new Server(server, {
 
 const PORT = 3001;
 const START_TIME = Date.now();
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
+
+// Panelde kişisel selamlama için makine sahibinin adı.
+// `id -F` macOS'ta tam adı verir ("Gökay K"); ilk kelimeyi kullanıyoruz.
+// Alınamazsa selamlama isimsiz gösterilir — panel yine çalışır.
+const OWNER_NAME = (() => {
+    try {
+        const full = require("child_process")
+            .execSync("id -F", { encoding: "utf8", timeout: 2000 })
+            .trim();
+        const first = full.split(/\s+/)[0];
+        return first && first.length <= 24 ? first : "";
+    } catch (e) {
+        return "";
+    }
+})();
 
 // --- adb-mcp proxy protokolü (orijinaliyle birebir aynı) -------------------
 
@@ -165,6 +180,7 @@ app.get("/status", (req, res) => {
         port: PORT,
         uptimeSec: Math.floor((Date.now() - START_TIME) / 1000),
         apps,
+        owner: OWNER_NAME,
         claude: readClaudeConfigStatus(),
     });
 });
