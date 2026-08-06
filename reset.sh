@@ -254,7 +254,8 @@ lsof -tiTCP:3001 -sTCP:LISTEN >/dev/null 2>&1 && { warn "3001 portu hâlâ dolu"
 
 if [ "$DO_INSTALL" -eq 1 ]; then
   step "Temiz kurulum başlatılıyor"
-  curl -fsSL "$INSTALL_URL" | bash
+  # reset zaten uygulama kontrolünü yaptı; install tekrar sormasın
+  curl -fsSL "$INSTALL_URL" | bash -s -- --force
   exit $?
 fi
 

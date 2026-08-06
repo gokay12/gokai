@@ -20,6 +20,9 @@
 
 set -euo pipefail
 
+FORCE=0
+for a in "$@"; do [ "$a" = "--force" ] && FORCE=1; done
+
 # ---------------------------------------------------------------- ayarlar ---
 GOKAI_REPO_TARBALL="${GOKAI_REPO_TARBALL:-https://codeload.github.com/gokay12/gokai/tar.gz/refs/heads/main}"
 ADB_MCP_TARBALL="https://codeload.github.com/mikechambers/adb-mcp/tar.gz/refs/heads/main"
@@ -46,6 +49,21 @@ bold " ██║   ██║██║   ██║██╔═██╗ ██╔
 bold " ╚██████╔╝╚██████╔╝██║  ██╗██║  ██║██║"
 bold "  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝"
 bold "  Adobe MCP Köprüsü — Kurulum"
+
+# Claude Desktop açıkken yapılandırma dosyasını düzenlemek GÜVENLİ DEĞİL:
+# Claude kapanırken kendi bellekteki (eski) kopyasını dosyanın üzerine yazabiliyor
+# ve kurulumda eklenen sunucular sessizce kayboluyor.
+CLAUDE_PROC="$(ps -Ao comm= | grep 'Applications/Claude.app/Contents/MacOS/Claude$' || true)"
+if [ -n "$CLAUDE_PROC" ] && [ "$FORCE" -eq 0 ]; then
+  printf "\n  \033[33m!\033[0m \033[1mClaude Desktop açık.\033[0m\n\n"
+  echo "  Claude açıkken yapılandırma düzenlenirse, Claude kapanırken eski"
+  echo "  ayarlarını geri yazabilir ve kurulum boşa gider."
+  echo ""
+  printf "  Lütfen Claude Desktop uygulamasini \033[1mCmd+Q\033[0m ile kapatip tekrar calistirin.\n"
+  echo "  (Yine de devam etmek için: ... | bash -s -- --force)"
+  echo ""
+  exit 1
+fi
 
 mkdir -p "$GOKAI_DIR" "$LOG_DIR" "$HOME/Applications" "$HOME/Library/LaunchAgents"
 

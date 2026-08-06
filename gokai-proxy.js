@@ -165,6 +165,20 @@ function readClaudeConfigStatus() {
     }
 }
 
+// Photoshop açık mı? AppleScript sunucusu proxy'den geçmediği için bağlantı
+// durumu göremiyoruz; en azından uygulamanın çalışıp çalışmadığını bildirelim.
+function isPhotoshopRunning() {
+    try {
+        require("child_process").execSync(
+            'pgrep -f "Adobe Photoshop [0-9]" >/dev/null 2>&1',
+            { timeout: 2000 }
+        );
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 app.get("/status", (req, res) => {
     const apps = {};
     for (const name of ["photoshop", "illustrator"]) {
@@ -181,6 +195,7 @@ app.get("/status", (req, res) => {
         uptimeSec: Math.floor((Date.now() - START_TIME) / 1000),
         apps,
         owner: OWNER_NAME,
+        photoshopRunning: isPhotoshopRunning(),
         claude: readClaudeConfigStatus(),
     });
 });

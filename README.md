@@ -30,7 +30,11 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/reset.sh | bash 
 ```
 
 > Emin değilsen ikincisini kullan — temiz makinede de sorunsuz çalışır.
-> Önce Photoshop, Illustrator ve Claude Desktop'ı kapat (betik açıksa reddeder).
+
+> ⚠️ **Kurulumdan önce Claude Desktop'ı Cmd+Q ile kapat.** Claude açıkken
+> yapılandırma dosyası düzenlenirse Claude kendi eski kopyasını üzerine yazabiliyor
+> ve kurulum sessizce geri alınıyor. Betikler bunu kontrol edip açıksa reddediyor.
+> Photoshop ve Illustrator da kapalı olmalı (eklentiler açık uygulamaya kurulamaz).
 
 ## Kurulumdan sonra — makine başına tek seferlik
 
@@ -101,7 +105,12 @@ eklentilerin (AtomX vb.), GokAI dışındaki MCP sunucuların, yapılandırma ye
 - **Connect'e basınca hiçbir şey olmuyor** → Panel, eklenti yüklenmeden *önce*
   açılmış olabilir. Paneli kapat, uygulamayı yeniden başlat, paneli tekrar aç.
 - **Claude araçları görmüyor** → Claude Desktop Cmd+Q ile tamamen kapatılıp açıldı mı?
-- **Kurulum "Photoshop açık" diyor** → Photoshop'u kapatıp betiği tekrar çalıştır.
+- **Kurulum "Photoshop açık" / "Claude Desktop açık" diyor** → İlgili uygulamayı
+  kapatıp betiği tekrar çalıştır. Bu kontrol bilinçli: açık uygulamalar kurulumu
+  sessizce geri alabiliyor.
+- **Kurulum başarılı görünüyor ama Claude sunucuları görmüyor** → Kurulum sırasında
+  Claude Desktop açık mıydı? Açıksa yapılandırmayı geri yazmış olabilir; Claude'u
+  Cmd+Q ile kapatıp kurulumu tekrar çalıştır.
 
 ## Bilinen sınırlar
 

@@ -417,13 +417,25 @@ async function tick() {
       cardC.classList.remove("ok"); cardC.classList.add("show-hint");
     }
 
-    // Beta makinede Photoshop eklentisi yok → kartı gizle
-    activeApps = s.claude.photoshopPlugin === false
-      ? APPS.filter((a) => a !== "photoshop")
-      : APPS;
-    for (const name of APPS) {
-      const c = document.querySelector('[data-app="' + name + '"]');
-      if (c) c.style.display = activeApps.includes(name) ? "" : "none";
+    // Photoshop iki farklı şekilde çalışabilir:
+    //  - eklenti modu (normal PS): proxy üzerinden bağlanır, bağlantı durumu görünür
+    //  - AppleScript modu (Beta):  proxy'den geçmez, eklenti/Connect gerekmez
+    const psPluginMode = s.claude.photoshopPlugin !== false;
+    activeApps = psPluginMode ? APPS : APPS.filter((a) => a !== "photoshop");
+
+    if (!psPluginMode) {
+      const card = document.querySelector('[data-app="photoshop"]');
+      const st = card.querySelector(".state");
+      card.querySelector(".kind").textContent = "AppleScript · eklenti gerekmez";
+      card.classList.remove("show-hint");
+      if (s.photoshopRunning) {
+        setState(st, "ok", "Hazır");
+        card.classList.add("ok");
+      } else {
+        setState(st, "wait", "Photoshop kapalı");
+        card.classList.remove("ok");
+      }
+      card.querySelector(".lastseen").textContent = "";
     }
 
     // uygulama kartları
@@ -446,7 +458,10 @@ async function tick() {
     }
 
     // genel sağlık
-    renderGreeting(s.owner, connected, activeApps.length, claudeOk);
+    // AppleScript modundaki Photoshop'u da "hazır" sayarak özet çıkar
+    const extraReady = (!psPluginMode && s.photoshopRunning) ? 1 : 0;
+    const extraTotal = psPluginMode ? 0 : 1;
+    renderGreeting(s.owner, connected + extraReady, activeApps.length + extraTotal, claudeOk);
 
     if (connected === activeApps.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
     else if (connected > 0) setHealth("ok", connected + "/" + activeApps.length + " uygulama bağlı");
