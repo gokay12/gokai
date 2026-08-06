@@ -42,10 +42,20 @@ yapılandırma yedekleri. Adobe uygulamaları veya Claude açıksa çalışmayı
 ## Kurulumdan sonra (her makinede)
 
 - Claude Desktop **tamamen** kapatılıp açılmalı (Cmd+Q).
-- **Illustrator hazır** — betik CEP eklentisini otomatik kurar. Illustrator'ı
-  yeniden başlat → **Pencere › Uzantılar › Illustrator MCP Agent** → **Connect** →
-  **Connect automatically on launch** işaretle. Bu bir kereliktir, kalıcıdır.
-- **Photoshop UXP eklentisini sen kuracaksın** (aşağıya bak).
+Kurulum betiği **her iki Adobe eklentisini de kendisi kurar**. Sana kalan tek şey
+her uygulamada bir kez panel açıp Connect'e basmak:
+
+- **Illustrator** → yeniden başlat → bir dosya aç → **Pencere › Uzantılar ›
+  Illustrator MCP Agent** → **Connect** → **Connect automatically on launch** ✅
+- **Photoshop** → yeniden başlat → **Eklentiler › Photoshop MCP Agent** →
+  **Connect** → **Connect on Launch** ✅
+
+Her ikisi de kalıcıdır — bir daha uğraşmazsın.
+
+> Kurulum sırasında Photoshop adımında **sarı uyarı** çıktıysa (Photoshop Beta'da
+> olur), o makinede eklenti elle kurulmalı: UXP Developer Tools › **Add Plugin** ›
+> `~/Library/Application Support/GokAI/adb-mcp/uxp/ps/manifest.json` › **Load**.
+> Bu durumda Photoshop her açıldığında tekrar `Load` gerekir.
 - Durum paneli: **GokAI.app** (~/Applications) veya `http://localhost:3001`
 
 ## Claude Desktop'a eklenen MCP sunucuları

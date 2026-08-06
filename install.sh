@@ -12,9 +12,10 @@
 #   4. GokAI proxy'yi kurar ve oturum açılışında otomatik başlatır (launchd)
 #   5. Claude Desktop yapılandırmasına MCP sunucularını ekler (mevcut ayarları BOZMAZ)
 #   6. Illustrator CEP eklentisini kurar (kalıcı)
-#   7. ~/Applications içine GokAI.app kısayolu koyar (durum panelini açar)
+#   7. Photoshop UXP eklentisini .ccx olarak kurar (kalıcı; Beta hariç)
+#   8. ~/Applications içine GokAI.app kısayolu koyar (durum panelini açar)
 #
-# Photoshop UXP eklentisi bu betiğin kapsamı dışındadır (elle kurulur).
+# Not: Photoshop Beta kullanılıyorsa .ccx kurulumu çalışmaz, eklenti elle yüklenir.
 
 set -euo pipefail
 
@@ -47,7 +48,7 @@ bold "  Adobe MCP Köprüsü — Kurulum"
 mkdir -p "$GOKAI_DIR" "$LOG_DIR" "$HOME/Applications" "$HOME/Library/LaunchAgents"
 
 # ------------------------------------------------------------- 1. Node.js ---
-step "1/7 Node.js hazırlanıyor (özel kopya, sisteme dokunmaz)"
+step "1/8 Node.js hazırlanıyor (özel kopya, sisteme dokunmaz)"
 ARCH="$(uname -m)"
 case "$ARCH" in
   arm64)  NODE_ARCH="darwin-arm64" ;;
@@ -70,7 +71,7 @@ fi
 export PATH="$NODE_DIR/bin:$PATH"
 
 # ------------------------------------------------------------------ 2. uv ---
-step "2/7 uv (Python yöneticisi) hazırlanıyor"
+step "2/8 uv (Python yöneticisi) hazırlanıyor"
 if command -v uv >/dev/null 2>&1; then
   UV_BIN="$(command -v uv)"
   ok "Zaten kurulu: $UV_BIN"
@@ -85,7 +86,7 @@ else
 fi
 
 # ------------------------------------------------------------- 3. adb-mcp ---
-step "3/7 adb-mcp indiriliyor"
+step "3/8 adb-mcp indiriliyor"
 ADB_DIR="$GOKAI_DIR/adb-mcp"
 curl -fsSL "$ADB_MCP_TARBALL" -o "$GOKAI_DIR/adb-mcp.tar.gz"
 rm -rf "$ADB_DIR"; mkdir -p "$ADB_DIR"
@@ -94,7 +95,7 @@ rm "$GOKAI_DIR/adb-mcp.tar.gz"
 ok "adb-mcp hazır: $ADB_DIR"
 
 # --------------------------------------------------------- 4. GokAI proxy ---
-step "4/7 GokAI proxy + durum paneli kuruluyor"
+step "4/8 GokAI proxy + durum paneli kuruluyor"
 PROXY_DIR="$GOKAI_DIR/proxy"
 mkdir -p "$PROXY_DIR"
 
@@ -146,7 +147,7 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST"
 ok "Arka plan servisi kuruldu (oturum açılışında otomatik başlar)"
 
 # ---------------------------------------------- 5. Claude Desktop config ---
-step "5/7 Claude Desktop yapılandırılıyor"
+step "5/8 Claude Desktop yapılandırılıyor"
 [ -f "$CLAUDE_CONFIG" ] && cp "$CLAUDE_CONFIG" "$CLAUDE_CONFIG.gokai-backup-$(date +%Y%m%d%H%M%S)"
 
 GOKAI_DIR="$GOKAI_DIR" UV_BIN="$UV_BIN" CLAUDE_CONFIG="$CLAUDE_CONFIG" \
@@ -207,7 +208,7 @@ done
 # ------------------------------------------- 6. Illustrator eklentisi (CEP) ---
 # Illustrator CEP kullanıyor: klasör bağlantısı + imzasız eklentilere izin.
 # UXP'nin aksine bu KALICIDIR — Illustrator her açıldığında tekrar yüklemeye gerek yok.
-step "6/7 Illustrator eklentisi kuruluyor (CEP)"
+step "6/8 Illustrator eklentisi kuruluyor (CEP)"
 CEP_DIR="$HOME/Library/Application Support/Adobe/CEP/extensions"
 CEP_SRC="$GOKAI_DIR/adb-mcp/cep/com.mikechambers.ai"
 if [ -d "$CEP_SRC" ]; then
@@ -221,8 +222,44 @@ else
   warn "CEP kaynağı bulunamadı, atlandı"
 fi
 
-# ----------------------------------------------------- 7. GokAI.app kısayolu ---
-step "7/7 GokAI.app oluşturuluyor"
+# ------------------------------------------- 7. Photoshop eklentisi (UXP/.ccx) ---
+# Adobe'nin resmi komut satırı kurucusuyla (UPIA) .ccx paketini kurar.
+# Başarılı olursa KALICIDIR — UXP Developer Tools'a hiç gerek kalmaz.
+# Photoshop Beta'da çalışmaz (Adobe Beta'yı geçerli hedef saymıyor); o durumda
+# aşağıdaki uyarı çıkar ve UDT ile elle kurulur.
+step "7/8 Photoshop eklentisi kuruluyor (.ccx)"
+UPIA="/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent"
+PS_CCX_URL="https://github.com/mikechambers/adb-mcp/releases/download/v0.85.4/Photoshop.MCP.Agent_PS.ccx"
+PS_CCX="$GOKAI_DIR/Photoshop_MCP_Agent.ccx"
+UXP_EXTERNAL="$HOME/Library/Application Support/Adobe/UXP/Plugins/External"
+
+ps_plugin_installed() { ls "$UXP_EXTERNAL" 2>/dev/null | grep -qi "Photoshop MCP Agent"; }
+
+if [ ! -x "$UPIA" ]; then
+  warn "Adobe eklenti kurucusu bulunamadı — Photoshop eklentisi elle kurulmalı"
+elif pgrep -f "Adobe Photoshop [0-9]" >/dev/null 2>&1; then
+  warn "Photoshop açık — eklenti kurulamadı. Photoshop'u kapatıp kurulumu tekrar çalıştırın."
+else
+  curl -fsSL "$PS_CCX_URL" -o "$PS_CCX" 2>/dev/null || true
+  if [ -s "$PS_CCX" ]; then
+    # UPIA bazen takılıyor: arka planda çalıştırıp süre sınırı koy.
+    # Ayrıca eski bir kayıt varsa önce kaldır — yoksa "başarılı" deyip dosya yazmıyor.
+    ( "$UPIA" --remove "Photoshop MCP Agent" >/dev/null 2>&1 & sleep 20; kill %1 2>/dev/null ) >/dev/null 2>&1
+    ( "$UPIA" --install "$PS_CCX" >/dev/null 2>&1 & sleep 40; kill %1 2>/dev/null ) >/dev/null 2>&1
+    if ps_plugin_installed; then
+      ok "Photoshop eklentisi kalıcı olarak kuruldu (UDT gerekmiyor)"
+    else
+      warn "Otomatik kurulum olmadı — Photoshop Beta kullanıyorsanız normaldir."
+      warn "Elle kurulum: UXP Developer Tools › Add Plugin ›"
+      warn "  $GOKAI_DIR/adb-mcp/uxp/ps/manifest.json  → Load"
+    fi
+  else
+    warn "Eklenti paketi indirilemedi (internet?) — elle kurulacak"
+  fi
+fi
+
+# ----------------------------------------------------- 8. GokAI.app kısayolu ---
+step "8/8 GokAI.app oluşturuluyor"
 APP="$HOME/Applications/GokAI.app"
 rm -rf "$APP"
 osacompile -e 'do shell script "open http://localhost:3001"' -o "$APP" >/dev/null 2>&1
@@ -246,7 +283,8 @@ printf "\n\033[1;32mKurulum tamamlandı!\033[0m\n\n"
 echo "Sonraki adımlar:"
 echo "  1. Claude Desktop'ı TAMAMEN kapatıp yeniden açın (Cmd+Q)"
 echo "  2. Illustrator: yeniden başlat → Pencere › Uzantılar › Illustrator MCP Agent → Connect"
-echo "  3. Photoshop UXP eklentisi ayrıca kurulacak (kurulumu yapan kişi halleder)"
+echo "  3. Photoshop: yeniden başlat → Eklentiler › Photoshop MCP Agent → Connect"
+echo "     (yukarıda sarı uyarı çıktıysa eklenti elle kurulmalı)"
 echo "  4. Durum paneli: GokAI.app  →  http://localhost:3001"
 echo ""
 open "http://localhost:3001" 2>/dev/null || true
