@@ -127,7 +127,6 @@ const GOKAI_CONFIG_KEYS = [
     "GokAI Photoshop",
     "GokAI Photoshop Plugin",
     "GokAI Illustrator",
-    "GokAI InDesign",
 ];
 
 function readClaudeConfigStatus() {
@@ -147,7 +146,7 @@ function readClaudeConfigStatus() {
 
 app.get("/status", (req, res) => {
     const apps = {};
-    for (const name of ["photoshop", "illustrator", "indesign", "premiere", "aftereffects"]) {
+    for (const name of ["photoshop", "illustrator"]) {
         apps[name] = {
             connected: !!(applicationClients[name] && applicationClients[name].size > 0),
             clients: applicationClients[name] ? applicationClients[name].size : 0,

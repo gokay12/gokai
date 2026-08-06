@@ -1,6 +1,6 @@
 # GokAI — Adobe MCP Köprüsü
 
-Ajans içindeki Mac'lere Claude ↔ Adobe (Photoshop / Illustrator / InDesign)
+Ajans içindeki Mac'lere Claude ↔ Adobe (Photoshop / Illustrator)
 entegrasyonunu tek komutla kuran sistem.
 
 ## Bileşenler
@@ -16,8 +16,7 @@ entegrasyonunu tek komutla kuran sistem.
 
 1. GitHub'da `gokai` adında bir repo aç (public).
 2. Bu klasördeki dosyaları push et.
-3. `install.sh` içindeki `gokay12` yer tutucusunu kendi kullanıcı adınla değiştir (2 yerde: en üstteki yorum + `GOKAI_REPO_TARBALL`).
-4. Arkadaşlarına şu tek satırı gönder:
+3. Arkadaşlarına şu tek satırı gönder:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bash
@@ -26,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bas
 ## Kurulumdan sonra (her makinede)
 
 - Claude Desktop **tamamen** kapatılıp açılmalı (Cmd+Q).
-- UXP/CEP eklentilerini sen kuracaksın (Photoshop `.ccx`, InDesign UXP, Illustrator CEP).
+- UXP/CEP eklentilerini sen kuracaksın (Photoshop UXP, Illustrator CEP).
   Eklenti panellerinde **Connect on Launch** işaretlenirse kimsenin bir daha
   butona basması gerekmez.
 - Durum paneli: **GokAI.app** (~/Applications) veya `http://localhost:3001`
@@ -38,7 +37,6 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bas
 | GokAI Photoshop | `@alisaitteke/photoshop-mcp` (npx) | Eklenti gerektirmez, AppleScript ile çalışır |
 | GokAI Photoshop Plugin | adb-mcp `ps-mcp.py` | UXP eklentisi + proxy gerekir |
 | GokAI Illustrator | adb-mcp `ai-mcp.py` | CEP eklentisi + proxy gerekir |
-| GokAI InDesign | adb-mcp `id-mcp.py` | UXP eklentisi + proxy gerekir |
 
 > **Önemli:** adb-mcp girdilerinde `mcp[cli]==1.5.0` sabitlemesi bilinçli.
 > Paketin yeni sürümlerinde `mcp.server.fastmcp` modülü kaldırıldığı için
@@ -52,10 +50,10 @@ Kurulum betiği MCP sunucularını ve proxy'yi halleder; Adobe eklentileri elle 
 `~/Library/Application Support/Adobe/CEP/extensions` içine sembolik bağ + `PlayerDebugMode`.
 Panel: **Pencere › Uzantılar › Illustrator MCP Agent** (önce bir dosya açık olmalı).
 
-**Photoshop / InDesign (UXP)** — UXP Developer Tools ile:
-1. Photoshop/InDesign'da **Ayarlar › Eklentiler › Geliştirici Modunu Etkinleştir** → uygulamayı yeniden başlat
+**Photoshop (UXP)** — UXP Developer Tools ile:
+1. Photoshop'ta **Ayarlar › Eklentiler › Geliştirici Modunu Etkinleştir** → uygulamayı yeniden başlat
 2. UXP Developer Tools → **Add Plugin** →
-   `~/Library/Application Support/GokAI/adb-mcp/uxp/ps/manifest.json` (ve `.../id/manifest.json`)
+   `~/Library/Application Support/GokAI/adb-mcp/uxp/ps/manifest.json`
 3. **Load** → uygulamada **Eklentiler › … MCP Agent** panelini aç → **Connect**
 4. Panelde **Connect on Launch**'ı işaretle
 
@@ -74,15 +72,18 @@ Panel: **Pencere › Uzantılar › Illustrator MCP Agent** (önce bir dosya aç
 - **Connect'e basınca hiçbir şey olmuyor** → Panel, UDT'den `Load` yapılmadan önce
   açılmış demektir. Paneli kapat, UDT'de `Load` durumunu doğrula, paneli yeniden aç.
 - **`Connection error: timeout`** (UDT › Debug › Console) → Eklenti manifest'inde
-  ağ izni hatalı. Kurulum betiği InDesign için bunu otomatik düzeltir; başka bir
-  uygulamada görülürse `requiredPermissions.network.domains` değeri `"all"`
+  ağ izni hatalı: `requiredPermissions.network.domains` değeri `"all"`
   (dizi değil, düz string) olmalı.
 - **Claude araçları görmüyor** → Claude Desktop Cmd+Q ile tamamen kapatılıp açıldı mı?
 
 ## Bilinen sınırlar
 
-- Photoshop/InDesign UXP eklentileri `.ccx` olarak kurulmadıysa (UXP Developer
-  Tools ile yüklendiyse) her uygulama açılışında yeniden yüklenmeleri gerekir.
+- Photoshop UXP eklentisi `.ccx` olarak kurulmadıysa (UXP Developer Tools ile
+  yüklendiyse) Photoshop her açıldığında yeniden `Load` edilmelidir.
+  Illustrator (CEP) bundan etkilenmez — kalıcıdır.
+- **InDesign desteklenmiyor:** adb-mcp'nin InDesign UXP eklentisi upstream'de hatalı
+  bir manifest ağ izniyle geliyor (`domains` dizi olarak) ve proxy'ye bağlanamıyor
+  (`Connection error: timeout`). Upstream düzelirse tekrar eklenebilir.
 - Proxy portu sabit: 3001.
 
 ## Teşekkürler & Lisanslar
@@ -91,7 +92,7 @@ GokAI, iki harika açık kaynak projenin üzerine kurulmuş bir kurulum/panel ka
 asıl işi yapan onlar:
 
 - **[adb-mcp](https://github.com/mikechambers/adb-mcp)** — Mike Chambers (MIT).
-  Photoshop / Illustrator / InDesign MCP sunucuları ve UXP/CEP eklentileri.
+  Photoshop / Illustrator MCP sunucuları ve UXP/CEP eklentileri.
   `gokai-proxy.js` içindeki proxy protokolü bu projenin `adb-proxy-socket`
   bileşeninden türetilmiştir; orijinal lisans bildirimi dosyada korunmaktadır.
   Kurulum sırasında proje kaynak kodu GitHub'dan indirilir.
