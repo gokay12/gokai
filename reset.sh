@@ -17,6 +17,24 @@
 
 set -uo pipefail
 
+# --- JSON düzenlemesi için yorumlayıcı seç ---------------------------------
+# Sistem python3'ü (/usr/bin/python3) Xcode Command Line Tools gerektirir ve
+# kurulu değilse bir kurulum penceresi açar. Tasarımcı makinelerinde çoğu zaman
+# yoktur — o yüzden önce CLT'yi kontrol et, yoksa uv'nin indirdiği python'a düş.
+PY_RUN=""
+if xcode-select -p >/dev/null 2>&1 && /usr/bin/python3 -c "pass" >/dev/null 2>&1; then
+  PY_RUN="/usr/bin/python3"
+else
+  for c in "$HOME/.local/share/uv/python"/*/bin/python3; do
+    [ -x "$c" ] && PY_RUN="$c" && break
+  done
+  if [ -z "$PY_RUN" ]; then
+    if command -v uv >/dev/null 2>&1; then PY_RUN="uv run --quiet python"
+    elif [ -x "$HOME/.local/bin/uv" ]; then PY_RUN="$HOME/.local/bin/uv run --quiet python"
+    fi
+  fi
+fi
+
 DO_INSTALL=0
 FORCE=0
 for a in "$@"; do
@@ -86,9 +104,13 @@ fi
 
 # ---------------------------------------------------- 2. Claude Desktop config ---
 step "2/8 Claude Desktop yapılandırması temizleniyor"
+if [ -z "$PY_RUN" ]; then
+  warn "JSON düzenleyici bulunamadı — yapılandırma temizliği atlanıyor."
+  warn "Kurulum yine de çalışır; eski girdiler Claude'da görünürse haber ver."
+fi
 if [ -f "$CLAUDE_CONFIG" ]; then
   cp "$CLAUDE_CONFIG" "$CLAUDE_CONFIG.reset-backup-$(date +%Y%m%d%H%M%S)"
-  CLAUDE_CONFIG="$CLAUDE_CONFIG" /usr/bin/python3 <<'PYEOF'
+  CLAUDE_CONFIG="$CLAUDE_CONFIG" $PY_RUN <<'PYEOF'
 import json, os, sys
 p = os.environ["CLAUDE_CONFIG"]
 try:
@@ -151,7 +173,7 @@ done < <(find "$UXP_DIR/PluginsStorage" -maxdepth 3 -iname "*MCP Agent*" 2>/dev/
 
 # UXP kayıt defteri: dosyayı silme — sadece BİZİM girdileri çıkar
 if [ -d "$UXP_DIR/PluginsInfo/v1" ]; then
-  UXP_V1="$UXP_DIR/PluginsInfo/v1" /usr/bin/python3 <<'PYEOF'
+  UXP_V1="$UXP_DIR/PluginsInfo/v1" $PY_RUN <<'PYEOF'
 import json, os, glob
 d = os.environ["UXP_V1"]
 for f in glob.glob(os.path.join(d, "*.json")):
@@ -178,7 +200,7 @@ fi
 # ------------------------------------------------------- 5. UDT çalışma alanı ---
 step "5/8 UXP Developer Tools listesi"
 if [ -f "$UDT_WS" ]; then
-  UDT_WS="$UDT_WS" /usr/bin/python3 <<'PYEOF'
+  UDT_WS="$UDT_WS" $PY_RUN <<'PYEOF'
 import json, os
 p = os.environ["UDT_WS"]
 try:

@@ -3,6 +3,21 @@
 Ajans içindeki Mac'lere Claude ↔ Adobe (Photoshop / Illustrator)
 entegrasyonunu tek komutla kuran sistem.
 
+## Makinede ne olması gerekiyor?
+
+**Hiçbir şey.** Ne Homebrew, ne Python, ne Node.js, ne Xcode araçları.
+
+| Gereksinim | Nasıl karşılanıyor |
+|---|---|
+| Node.js | Betik kendi özel kopyasını indirir (sisteme dokunmaz, sudo istemez) |
+| Python | `uv` kendi Python'unu indirir — macOS'un eski 3.9'u kullanılmaz |
+| uv | Yoksa betik kurar (Homebrew'e gerek yok, tek dosya) |
+| Adobe eklentileri | Betik kurar (Illustrator CEP + Photoshop `.ccx`) |
+
+Tek gerçek gereksinim: **macOS + Creative Cloud uygulamaları + Claude Desktop**.
+Kurulan her şey `~/Library/Application Support/GokAI/` içinde toplanır,
+`reset.sh` ile izsiz kaldırılır.
+
 ## Bileşenler
 
 | Dosya | Ne işe yarar |
