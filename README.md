@@ -56,7 +56,7 @@ Betik bunu **kendisi algılar**, aynı komutu çalıştır, ekstra bir şey yapm
 Adobe, Beta sürümünü geçerli eklenti hedefi saymadığı için UXP eklentisi
 kurulamaz. Betik bu durumda `.ccx` adımını atlar, bağlanamayacak olan
 `GokAI Photoshop Plugin` sunucusunu Claude'a hiç eklemez (eskiden kalmışsa siler)
-ve panelde Photoshop kartını gizler.
+ve panelde Photoshop kartını "AppleScript · eklenti gerekmez" olarak gösterir.
 
 Photoshop yine **tam çalışır**: `GokAI Photoshop` sunucusu AppleScript kullanır,
 eklenti ve proxy istemez. Photoshop Beta 27.10'da doğrulandı — `photoshop_ping`
