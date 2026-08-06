@@ -165,6 +165,46 @@ function readClaudeConfigStatus() {
     }
 }
 
+// --- Uygulama başlatma ------------------------------------------------------
+// Panelden çift tıklayınca uygulamayı açmak için. Tarayıcı doğrudan uygulama
+// başlatamaz, bu yüzden proxy yapıyor. Güvenlik: sabit beyaz liste (kullanıcıdan
+// gelen isim/yol asla `open`'a geçmez) + Origin kontrolü (kötü niyetli bir web
+// sayfası localhost'a POST atıp uygulama açtıramasın).
+const LAUNCHABLE = ["photoshop", "illustrator", "claude"];
+
+// Uygulama yollarını dosya sisteminden çöz. Kabuk kullanmıyoruz: "Adobe
+// Photoshop 2026" gibi boşluklu klasör adları glob'da bozuluyor.
+function resolveApps() {
+    const found = {};
+    let entries = [];
+    try { entries = fs.readdirSync("/Applications"); } catch (e) { return found; }
+
+    // Klasör ya da doğrudan .app olabilir; sürümlü klasörse içindeki .app'i al
+    const pick = (matches) => {
+        const hits = entries.filter(matches).sort();
+        // Beta ve normal sürüm birlikteyse normal olanı tercih et
+        hits.sort((a, b) => (a.includes("(Beta)") ? 1 : 0) - (b.includes("(Beta)") ? 1 : 0));
+        for (const e of hits) {
+            const full = "/Applications/" + e;
+            if (e.endsWith(".app")) return full;
+            try {
+                const inner = fs.readdirSync(full).find((f) => f.endsWith(".app"));
+                if (inner) return full + "/" + inner;
+            } catch (e2) { /* okunamadı, sıradakine geç */ }
+        }
+        return null;
+    };
+
+    const ps = pick((e) => e.startsWith("Adobe Photoshop"));
+    const ai = pick((e) => e.startsWith("Adobe Illustrator"));
+    const cl = pick((e) => e === "Claude.app");
+    if (ps) found.photoshop = ps;
+    if (ai) found.illustrator = ai;
+    if (cl) found.claude = cl;
+    return found;
+}
+let APP_PATHS = resolveApps();
+
 // Photoshop açık mı? AppleScript sunucusu proxy'den geçmediği için bağlantı
 // durumu göremiyoruz; en azından uygulamanın çalışıp çalışmadığını bildirelim.
 function isPhotoshopRunning() {
@@ -195,9 +235,33 @@ app.get("/status", (req, res) => {
         uptimeSec: Math.floor((Date.now() - START_TIME) / 1000),
         apps,
         owner: OWNER_NAME,
+        launchable: Object.keys(APP_PATHS),
         photoshopRunning: isPhotoshopRunning(),
         claude: readClaudeConfigStatus(),
     });
+});
+
+app.post("/open/:app", express.json(), (req, res) => {
+    // Sadece kendi panelimizden gelen istekleri kabul et
+    const origin = req.get("origin") || "";
+    if (origin && !/^http:\/\/(localhost|127\.0\.0\.1):3001$/.test(origin)) {
+        return res.status(403).json({ ok: false, error: "forbidden_origin" });
+    }
+    const key = req.params.app;
+    if (!LAUNCHABLE.includes(key)) {
+        return res.status(400).json({ ok: false, error: "unknown_app" });
+    }
+    // Uygulama sonradan kurulmuş olabilir — bulunamazsa bir kez daha tara
+    if (!APP_PATHS[key]) APP_PATHS = resolveApps();
+    const target = APP_PATHS[key];
+    if (!target) return res.status(404).json({ ok: false, error: "not_installed" });
+
+    // execFile: kabuk yok, argüman enjeksiyonu mümkün değil
+    require("child_process").execFile("/usr/bin/open", ["-a", target], (err) => {
+        if (err) console.log(`GokAI: ${key} açılamadı: ${err.message}`);
+    });
+    console.log(`GokAI: ${key} açılıyor → ${target}`);
+    res.json({ ok: true, app: key });
 });
 
 // launchd KeepAlive=true olduğu için çıkış = temiz yeniden başlatma

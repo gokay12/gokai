@@ -75,6 +75,19 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/reset.sh | bash
 `reset.sh` şunları **silmez**: Homebrew ile kurulmuş node/uv, diğer CEP/UXP
 eklentilerin (AtomX vb.), GokAI dışındaki MCP sunucuların, yapılandırma yedekleri.
 
+## Panelde ne var
+
+- **Kişisel selamlama** — saate göre *Günaydın / Merhaba / İyi akşamlar / İyi geceler*,
+  makine sahibinin adıyla (macOS hesap adından okunur).
+- **Canlı durum kartları** — her Adobe uygulaması ve sistem bileşeni için.
+- **Çift tıkla → aç** — Photoshop, Illustrator ve Claude Desktop kartlarına çift
+  tıklayınca uygulama açılır. (Kurulumdan sonra Claude'u yeniden başlatmak için pratik.)
+- **Yeniden başlat** düğmesi — proxy'yi sıfırlar.
+
+> Uygulama açma isteği proxy'ye gider (`POST /open/:app`); tarayıcı doğrudan
+> uygulama başlatamaz. Yalnızca sabit beyaz listedeki üç uygulama açılabilir ve
+> istek yalnızca panelin kendi kaynağından kabul edilir.
+
 ## Bileşenler
 
 | Dosya | Ne işe yarar |

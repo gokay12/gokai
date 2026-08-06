@@ -146,6 +146,18 @@
     content:""; position:absolute; inset:0 0 auto 0; height:1px;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
   }
+  .card.launchable { cursor: pointer; user-select: none; }
+  .card.launchable::after {
+    content: "çift tıkla → aç";
+    position: absolute; right: 16px; top: 16px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+    color: var(--faint); opacity: 0; transition: opacity .25s;
+    pointer-events: none;
+  }
+  .card.launchable:hover::after { opacity: 1; }
+  .card.launchable:active { transform: translateY(-1px) scale(.995); }
+  .card.opening::after { content: "açılıyor…"; opacity: 1; color: var(--g2); }
+
   .card.ok { border-color: rgba(48,217,143,.28); }
   .card.ok:hover { border-color: rgba(48,217,143,.45); }
 
@@ -265,7 +277,7 @@
   <section>
     <div class="sec-title">Adobe Uygulamaları</div>
     <div class="grid">
-      <div class="card" data-app="photoshop">
+      <div class="card" data-app="photoshop" data-launch="photoshop">
         <div class="head">
           <div class="tile ps">Ps</div>
           <div><div class="name">Photoshop</div><div class="kind">MCP Agent eklentisi</div></div>
@@ -280,7 +292,7 @@
         </div></div>
       </div>
 
-      <div class="card" data-app="illustrator">
+      <div class="card" data-app="illustrator" data-launch="illustrator">
         <div class="head">
           <div class="tile ai">Ai</div>
           <div><div class="name">Illustrator</div><div class="kind">MCP Agent eklentisi</div></div>
@@ -312,7 +324,7 @@
         <div class="meta" id="meta-proxy">—</div>
       </div>
 
-      <div class="card" id="card-claude">
+      <div class="card" id="card-claude" data-launch="claude">
         <div class="head">
           <div class="tile sys">✳</div>
           <div><div class="name">Claude Desktop</div><div class="kind">MCP yapılandırması</div></div>
@@ -461,6 +473,8 @@ async function tick() {
     // AppleScript modundaki Photoshop'u da "hazır" sayarak özet çıkar
     const extraReady = (!psPluginMode && s.photoshopRunning) ? 1 : 0;
     const extraTotal = psPluginMode ? 0 : 1;
+    wireLaunchers(s.launchable || []);
+
     renderGreeting(s.owner, connected + extraReady, activeApps.length + extraTotal, claudeOk);
 
     if (connected === activeApps.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
@@ -481,6 +495,39 @@ async function restartProxy() {
   btn.classList.add("spinning");
   try { await fetch("/restart", { method: "POST" }); } catch (e) {}
   setTimeout(() => { btn.classList.remove("spinning"); tick(); }, 2600);
+}
+
+// --- Çift tıklayınca uygulamayı aç -----------------------------------------
+// Tarayıcı uygulama başlatamaz; istek proxy'ye gidiyor, o `open -a` çalıştırıyor.
+async function launchApp(key, card) {
+  card.classList.add("opening");
+  try {
+    const r = await fetch("/open/" + key, { method: "POST" });
+    const d = await r.json();
+    if (!d.ok) {
+      card.classList.remove("opening");
+      const st = card.querySelector(".state");
+      if (st) setState(st, "bad", d.error === "not_installed" ? "Uygulama kurulu değil" : "Açılamadı");
+      return;
+    }
+  } catch (e) {
+    card.classList.remove("opening");
+    return;
+  }
+  // Uygulamanın açılması zaman alır; durum zaten 2 sn'de bir yenileniyor
+  setTimeout(() => card.classList.remove("opening"), 4000);
+}
+
+function wireLaunchers(available) {
+  document.querySelectorAll("[data-launch]").forEach((card) => {
+    const key = card.dataset.launch;
+    const can = available.includes(key);
+    card.classList.toggle("launchable", can);
+    if (!can || card.dataset.wired) return;
+    card.dataset.wired = "1";
+    card.title = "Çift tıklayarak aç";
+    card.addEventListener("dblclick", () => launchApp(key, card));
+  });
 }
 
 tick();
