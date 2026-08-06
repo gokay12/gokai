@@ -10,6 +10,7 @@ entegrasyonunu tek komutla kuran sistem.
 | `install.sh` | Tek satır kurulum: Node (özel kopya) + uv + adb-mcp + proxy + launchd + Claude config + GokAI.app |
 | `gokai-proxy.js` | adb-mcp proxy'sinin GokAI sürümü: aynı protokol + `/status` API + web paneli + `/restart` |
 | `public/index.html` | Durum paneli (http://localhost:3001) |
+| `reset.sh` | **Eski/bozuk kurulumları tamamen temizler** (elle kurulanlar dahil) |
 | `uninstall.sh` | Her şeyi geri alır |
 
 ## Dağıtım (senin yapacakların — bir kere)
@@ -22,12 +23,29 @@ entegrasyonunu tek komutla kuran sistem.
 curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/install.sh | bash
 ```
 
+## Daha önce kurulum yapılmış makineler
+
+Eski bir sürüm ya da elle kurulum varsa **önce sıfırla**, sonra kur:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/reset.sh | bash -s -- --install
+```
+
+Bu komut önce her şeyi temizler, ardından temiz kurulumu kendisi başlatır.
+Sadece temizlemek için `-s -- --install` kısmını çıkar.
+
+`reset.sh` şunları **silmez**: Homebrew ile kurulmuş node/uv, senin diğer
+CEP/UXP eklentilerin (AtomX vb.), GokAI ile ilgisi olmayan MCP sunucuların,
+yapılandırma yedekleri. Adobe uygulamaları veya Claude açıksa çalışmayı reddeder
+(zorlamak için `--force`).
+
 ## Kurulumdan sonra (her makinede)
 
 - Claude Desktop **tamamen** kapatılıp açılmalı (Cmd+Q).
-- UXP/CEP eklentilerini sen kuracaksın (Photoshop UXP, Illustrator CEP).
-  Eklenti panellerinde **Connect on Launch** işaretlenirse kimsenin bir daha
-  butona basması gerekmez.
+- **Illustrator hazır** — betik CEP eklentisini otomatik kurar. Illustrator'ı
+  yeniden başlat → **Pencere › Uzantılar › Illustrator MCP Agent** → **Connect** →
+  **Connect automatically on launch** işaretle. Bu bir kereliktir, kalıcıdır.
+- **Photoshop UXP eklentisini sen kuracaksın** (aşağıya bak).
 - Durum paneli: **GokAI.app** (~/Applications) veya `http://localhost:3001`
 
 ## Claude Desktop'a eklenen MCP sunucuları

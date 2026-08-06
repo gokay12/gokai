@@ -10,10 +10,11 @@
 #   2. uv (Python yöneticisi) kurar — yoksa
 #   3. adb-mcp kaynak kodunu indirir
 #   4. GokAI proxy'yi kurar ve oturum açılışında otomatik başlatır (launchd)
-#   5. Claude Desktop yapılandırmasına 4 MCP sunucusu ekler (mevcut ayarları BOZMAZ)
-#   6. ~/Applications içine GokAI.app kısayolu koyar (durum panelini açar)
+#   5. Claude Desktop yapılandırmasına MCP sunucularını ekler (mevcut ayarları BOZMAZ)
+#   6. Illustrator CEP eklentisini kurar (kalıcı)
+#   7. ~/Applications içine GokAI.app kısayolu koyar (durum panelini açar)
 #
-# UXP/CEP eklentileri bu betiğin kapsamı dışındadır (elle kurulur).
+# Photoshop UXP eklentisi bu betiğin kapsamı dışındadır (elle kurulur).
 
 set -euo pipefail
 
@@ -46,7 +47,7 @@ bold "  Adobe MCP Köprüsü — Kurulum"
 mkdir -p "$GOKAI_DIR" "$LOG_DIR" "$HOME/Applications" "$HOME/Library/LaunchAgents"
 
 # ------------------------------------------------------------- 1. Node.js ---
-step "1/6 Node.js hazırlanıyor (özel kopya, sisteme dokunmaz)"
+step "1/7 Node.js hazırlanıyor (özel kopya, sisteme dokunmaz)"
 ARCH="$(uname -m)"
 case "$ARCH" in
   arm64)  NODE_ARCH="darwin-arm64" ;;
@@ -69,7 +70,7 @@ fi
 export PATH="$NODE_DIR/bin:$PATH"
 
 # ------------------------------------------------------------------ 2. uv ---
-step "2/6 uv (Python yöneticisi) hazırlanıyor"
+step "2/7 uv (Python yöneticisi) hazırlanıyor"
 if command -v uv >/dev/null 2>&1; then
   UV_BIN="$(command -v uv)"
   ok "Zaten kurulu: $UV_BIN"
@@ -84,7 +85,7 @@ else
 fi
 
 # ------------------------------------------------------------- 3. adb-mcp ---
-step "3/6 adb-mcp indiriliyor"
+step "3/7 adb-mcp indiriliyor"
 ADB_DIR="$GOKAI_DIR/adb-mcp"
 curl -fsSL "$ADB_MCP_TARBALL" -o "$GOKAI_DIR/adb-mcp.tar.gz"
 rm -rf "$ADB_DIR"; mkdir -p "$ADB_DIR"
@@ -93,7 +94,7 @@ rm "$GOKAI_DIR/adb-mcp.tar.gz"
 ok "adb-mcp hazır: $ADB_DIR"
 
 # --------------------------------------------------------- 4. GokAI proxy ---
-step "4/6 GokAI proxy + durum paneli kuruluyor"
+step "4/7 GokAI proxy + durum paneli kuruluyor"
 PROXY_DIR="$GOKAI_DIR/proxy"
 mkdir -p "$PROXY_DIR"
 
@@ -145,7 +146,7 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST"
 ok "Arka plan servisi kuruldu (oturum açılışında otomatik başlar)"
 
 # ---------------------------------------------- 5. Claude Desktop config ---
-step "5/6 Claude Desktop yapılandırılıyor"
+step "5/7 Claude Desktop yapılandırılıyor"
 [ -f "$CLAUDE_CONFIG" ] && cp "$CLAUDE_CONFIG" "$CLAUDE_CONFIG.gokai-backup-$(date +%Y%m%d%H%M%S)"
 
 GOKAI_DIR="$GOKAI_DIR" UV_BIN="$UV_BIN" CLAUDE_CONFIG="$CLAUDE_CONFIG" \
@@ -190,7 +191,7 @@ Object.assign(cfg.mcpServers, entries); // sadece GokAI anahtarları; diğerleri
 
 fs.mkdirSync(path.dirname(configPath), { recursive: true });
 fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
-console.log("  \x1b[32m✓\x1b[0m 4 MCP sunucusu eklendi (mevcut ayarlar korundu)");
+console.log(`  \x1b[32m✓\x1b[0m ${Object.keys(entries).length} MCP sunucusu eklendi (mevcut ayarlar korundu)`);
 MERGE_EOF
 
 # Python ortamlarını önceden ısıt (ilk Claude açılışı yavaş olmasın)
@@ -203,8 +204,25 @@ for f in ps-mcp.py ai-mcp.py; do
     && ok "$f doğrulandı" || warn "$f doğrulanamadı (internet bağlantısını kontrol edin)"
 done
 
-# ----------------------------------------------------- 6. GokAI.app kısayolu ---
-step "6/6 GokAI.app oluşturuluyor"
+# ------------------------------------------- 6. Illustrator eklentisi (CEP) ---
+# Illustrator CEP kullanıyor: klasör bağlantısı + imzasız eklentilere izin.
+# UXP'nin aksine bu KALICIDIR — Illustrator her açıldığında tekrar yüklemeye gerek yok.
+step "6/7 Illustrator eklentisi kuruluyor (CEP)"
+CEP_DIR="$HOME/Library/Application Support/Adobe/CEP/extensions"
+CEP_SRC="$GOKAI_DIR/adb-mcp/cep/com.mikechambers.ai"
+if [ -d "$CEP_SRC" ]; then
+  mkdir -p "$CEP_DIR"
+  ln -sfn "$CEP_SRC" "$CEP_DIR/com.mikechambers.ai"
+  ok "eklenti bağlandı: com.mikechambers.ai"
+  # İmzasız CEP eklentilerinin yüklenmesi için gerekli (CSXS sürümü CC sürümüne göre değişir)
+  for v in 10 11 12 13; do defaults write "com.adobe.CSXS.$v" PlayerDebugMode 1 2>/dev/null; done
+  ok "PlayerDebugMode etkinleştirildi"
+else
+  warn "CEP kaynağı bulunamadı, atlandı"
+fi
+
+# ----------------------------------------------------- 7. GokAI.app kısayolu ---
+step "7/7 GokAI.app oluşturuluyor"
 APP="$HOME/Applications/GokAI.app"
 rm -rf "$APP"
 osacompile -e 'do shell script "open http://localhost:3001"' -o "$APP" >/dev/null 2>&1
@@ -227,7 +245,8 @@ fi
 printf "\n\033[1;32mKurulum tamamlandı!\033[0m\n\n"
 echo "Sonraki adımlar:"
 echo "  1. Claude Desktop'ı TAMAMEN kapatıp yeniden açın (Cmd+Q)"
-echo "  2. UXP/CEP eklentileri ayrıca kurulacak (kurulumu yapan kişi halleder)"
-echo "  3. Durum paneli: GokAI.app  →  http://localhost:3001"
+echo "  2. Illustrator: yeniden başlat → Pencere › Uzantılar › Illustrator MCP Agent → Connect"
+echo "  3. Photoshop UXP eklentisi ayrıca kurulacak (kurulumu yapan kişi halleder)"
+echo "  4. Durum paneli: GokAI.app  →  http://localhost:3001"
 echo ""
 open "http://localhost:3001" 2>/dev/null || true
