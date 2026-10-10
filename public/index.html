@@ -127,7 +127,14 @@
     color: var(--faint); margin-bottom: 14px; padding-left: 4px;
     display:flex; align-items:center; gap:10px;
   }
-  .sec-title::after { content:""; flex:1; height:1px; background: linear-gradient(90deg, var(--border), transparent); }
+  .sec-title::after { content:""; flex:1; height:1px; background: linear-gradient(90deg, var(--border), transparent); order: 1; }
+  .sec-title .linkbtn {
+    order: 2; appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
+    font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--muted);
+    transition: color .2s;
+  }
+  .sec-title .linkbtn:hover { color: var(--text); }
+  .sec-title .linkbtn:disabled { color: var(--faint); cursor: default; }
 
   .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 16px; }
 
@@ -209,6 +216,50 @@
   }
   .hint b { color: #ecd9ac; font-weight: 650; }
   .meta { color: var(--faint); font-size: 12px; margin-top: 15px; line-height: 1.7; }
+
+  /* ---- tanı ---- */
+  .doctor { padding: 20px 22px; }
+  .doctor:hover { transform: none; }
+  .doc-summary { display:flex; align-items:center; gap:10px; font-size: 14px; font-weight: 650; }
+  .doc-summary .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .doc-summary.ok   { color: var(--ok); }   .doc-summary.ok .dot   { background: var(--ok); }
+  .doc-summary.warn { color: var(--wait); } .doc-summary.warn .dot { background: var(--wait); }
+  .doc-summary.fail { color: var(--bad); }  .doc-summary.fail .dot { background: var(--bad); }
+  .doc-summary.busy { color: var(--muted); } .doc-summary.busy .dot { animation: pulse-wait 1.4s infinite; background: var(--wait); }
+  .doc-list { display: grid; gap: 9px; margin-top: 14px; }
+  .doc-list:empty { display: none; }
+  .doc-group {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--faint); margin-top: 8px;
+  }
+  .doc-item { display: grid; grid-template-columns: 16px 1fr; gap: 10px; font-size: 13px; line-height: 1.55; }
+  .doc-item .mk { font-weight: 800; text-align: center; }
+  .doc-item.ok .mk   { color: var(--ok); }
+  .doc-item.warn .mk { color: var(--wait); }
+  .doc-item.fail .mk { color: var(--bad); }
+  .doc-item.info .mk { color: var(--faint); }
+  .doc-item.fail .tt { font-weight: 650; }
+  .doc-item .dt { color: var(--muted); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .doc-item .fx { color: var(--g2); font-size: 12.5px; overflow-wrap: anywhere; }
+  .doc-fix {
+    margin-top: 16px; padding: 13px 15px; border-radius: 12px;
+    background: var(--bad-dim); border: 1px solid rgba(244,100,95,.25);
+    color: #f5b8b5; font-size: 12.5px; line-height: 1.6;
+  }
+  .doc-fix code {
+    display: block; margin: 9px 0 10px; padding: 9px 11px; border-radius: 8px;
+    background: rgba(0,0,0,.3); color: #ffd9d7;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    overflow-wrap: anywhere; user-select: all;
+  }
+  .doc-actions { display: flex; gap: 14px; margin-top: 12px; }
+  .doc-actions:empty { display: none; }
+  .textbtn {
+    appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
+    font: inherit; font-size: 12px; color: var(--muted); transition: color .2s;
+  }
+  .textbtn:hover { color: var(--text); }
+  .doc-fix .textbtn { color: #ffd9d7; font-weight: 600; }
 
   /* ---- alt bilgi ---- */
   footer {
@@ -303,7 +354,9 @@
         </div>
         <div class="hint"><div class="inner">
           Illustrator'da <b>önce bir dosya açın</b> →
-          <b>Pencere › Uzantılar › Illustrator MCP Agent</b> → <b>Connect</b>.
+          <b>Pencere › Uzantılar › Illustrator MCP Agent</b>.
+          Panel açılınca kendiliğinden bağlanır; açık bıraktığınız sürece
+          her açılışta yeniden bağlanır.
         </div></div>
       </div>
 
@@ -341,8 +394,22 @@
     </div>
   </section>
 
+  <section id="sec-doctor">
+    <div class="sec-title">Tanı <button class="linkbtn" id="doc-run" type="button">Yeniden çalıştır</button></div>
+    <div class="card doctor">
+      <div class="doc-summary busy" id="doc-summary"><span class="dot"></span><span id="doc-summary-text">Kontrol ediliyor…</span></div>
+      <div class="doc-list" id="doc-list"></div>
+      <div class="doc-fix" id="doc-fix" hidden>
+        Düzeltmek için Claude Desktop, Photoshop ve Illustrator'ı kapatıp Terminal'de şunu çalıştırın:
+        <code id="doc-fix-cmd"></code>
+        <button class="textbtn" id="doc-copy" type="button">Komutu kopyala</button>
+      </div>
+      <div class="doc-actions" id="doc-actions"></div>
+    </div>
+  </section>
+
   <footer>
-    <div class="l"><span class="mark"></span> GokAI <span id="ver">v—</span></div>
+    <div class="l"><span class="mark"></span> GokAI <span id="ver">v—</span><span id="installed"></span></div>
     <div>canlı · her 2 saniyede yenilenir</div>
   </footer>
 </div>
@@ -380,14 +447,20 @@ function greetingFor(h) {
 
 function renderGreeting(owner, connected, total, claudeOk) {
   const g = greetingFor(new Date().getHours());
-  document.getElementById("greeting").innerHTML =
-    owner ? g + ', <span class="nm">' + owner + "</span>" : g;
+  const h = document.getElementById("greeting");
+  h.textContent = owner ? g + ", " : g;
+  if (owner) {
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = owner;
+    h.appendChild(nm);
+  }
 
   const sub = document.getElementById("greeting-sub");
   if (total === 0)            sub.textContent = "Adobe uygulaması yapılandırılmamış.";
   else if (connected === total && claudeOk) sub.textContent = "Her şey hazır — Claude ile çalışmaya başlayabilirsin.";
   else if (connected > 0)     sub.textContent = total - connected + " uygulama bağlantı bekliyor.";
-  else                        sub.textContent = "Adobe uygulamalarını açıp Connect'e bas.";
+  else                        sub.textContent = "Adobe uygulamalarını aç; eklenti panelleri açıkken kendiliğinden bağlanırlar.";
 }
 
 function setHealth(cls, text) {
@@ -408,12 +481,21 @@ async function tick() {
     document.getElementById("meta-proxy").innerHTML =
       "Port <b>" + s.port + "</b> · çalışma süresi " + fmtUptime(s.uptimeSec);
     document.getElementById("ver").textContent = "v" + s.version;
+    document.getElementById("installed").textContent =
+      s.install && s.install.installedAt
+        ? " · kurulum " + new Date(s.install.installedAt).toLocaleDateString("tr-TR")
+        : "";
 
     // claude kartı
     const stC = document.getElementById("st-claude");
     const cardC = document.getElementById("card-claude");
     let claudeOk = false;
-    if (s.claude.found) {
+    const broken = (s.claude.broken || []).length;
+    if (s.claude.found && broken > 0) {
+      // Girdi var ama gösterdiği komut bu makinede yok: Claude sunucuyu açamaz.
+      setState(stC, "bad", "Komut bulunamadı · " + broken);
+      cardC.classList.remove("ok"); cardC.classList.add("show-hint");
+    } else if (s.claude.found) {
       const vals = Object.values(s.claude.entries);
       const okCount = vals.filter(Boolean).length;
       claudeOk = okCount === vals.length && vals.length > 0;
@@ -463,7 +545,10 @@ async function tick() {
         ls.textContent = "";
         card.classList.add("ok"); card.classList.remove("show-hint");
       } else {
-        setState(st, "wait", "Bekleniyor");
+        // Uygulama kapalıysa bunu söyle; açıksa eksik olan eklenti bağlantısıdır.
+        const label = name === "photoshop" ? "Photoshop" : "Illustrator";
+        if (a && a.running === false) setState(st, "wait", label + " kapalı");
+        else setState(st, "wait", "Eklenti bağlı değil");
         ls.textContent = a && a.lastSeen ? "son: " + rel(a.lastSeen) : "";
         card.classList.remove("ok"); card.classList.add("show-hint");
       }
@@ -477,9 +562,16 @@ async function tick() {
 
     renderGreeting(s.owner, connected + extraReady, activeApps.length + extraTotal, claudeOk);
 
-    if (connected === activeApps.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
+    // Tanı bir sorun bulduysa (ör. Claude'un sunucuları açılamıyor) öne çıkar:
+    // uygulamalar bağlı olsa bile Claude'da hata alınır.
+    const docFails = doctorReport ? doctorReport.counts.fail : (s.doctor ? s.doctor.counts.fail : 0);
+    if (docFails > 0) setHealth("bad", docFails + " sorun bulundu");
+    else if (connected === activeApps.length && claudeOk) setHealth("ok", "Tüm sistemler hazır");
     else if (connected > 0) setHealth("ok", connected + "/" + activeApps.length + " uygulama bağlı");
     else setHealth("wait", "Uygulama bekleniyor");
+
+    // Proxy arka planda yeni bir tanı çalıştırdıysa onu göster.
+    if (s.doctor && (!doctorReport || s.doctor.at > doctorFetchedAt) && !doctorBusy) loadDoctor(false);
   } catch (e) {
     document.body.classList.add("proxy-down");
     document.getElementById("greeting").textContent = greetingFor(new Date().getHours());
@@ -489,6 +581,97 @@ async function tick() {
     document.getElementById("card-proxy").classList.remove("ok");
   }
 }
+
+// --- Tanı ---------------------------------------------------------------
+// Proxy, MCP sunucularını Claude'un yaptığı gibi başlatıp dener ve sonucu
+// burada gösterir: sorun, kullanıcı Claude'da hatayla karşılaşmadan görünür.
+let doctorReport = null;
+let doctorFetchedAt = 0;
+let doctorBusy = false;
+let doctorShowAll = false;
+const MARK = { ok: "✓", warn: "!", fail: "✗", info: "·" };
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function renderDoctor() {
+  const sum = document.getElementById("doc-summary");
+  const sumText = document.getElementById("doc-summary-text");
+  const list = document.getElementById("doc-list");
+  const fix = document.getElementById("doc-fix");
+  const actions = document.getElementById("doc-actions");
+  list.textContent = "";
+  actions.textContent = "";
+
+  if (doctorBusy && !doctorReport) {
+    sum.className = "doc-summary busy";
+    sumText.textContent = "Kontrol ediliyor… (sunucular deneniyor, birkaç saniye sürer)";
+    fix.hidden = true;
+    return;
+  }
+  if (!doctorReport) {
+    sum.className = "doc-summary warn";
+    sumText.textContent = "Tanı çalıştırılamadı.";
+    fix.hidden = true;
+    return;
+  }
+
+  const n = doctorReport.counts;
+  if (doctorBusy) { sum.className = "doc-summary busy"; sumText.textContent = "Yeniden kontrol ediliyor…"; }
+  else if (n.fail > 0) { sum.className = "doc-summary fail"; sumText.textContent = n.fail + " sorun bulundu" + (n.warn ? ", " + n.warn + " uyarı" : ""); }
+  else if (n.warn > 0) { sum.className = "doc-summary warn"; sumText.textContent = "Çalışıyor · " + n.warn + " uyarı"; }
+  else { sum.className = "doc-summary ok"; sumText.textContent = "Her şey yolunda · " + n.ok + " kontrol"; }
+
+  // Varsayılan: yalnızca dikkat isteyenler. İstenirse tüm kontroller.
+  const shown = doctorReport.checks.filter((c) => doctorShowAll || c.status === "fail" || c.status === "warn");
+  let group = null;
+  for (const c of shown) {
+    if (c.group !== group) { group = c.group; list.appendChild(el("div", "doc-group", group)); }
+    const row = el("div", "doc-item " + c.status);
+    row.appendChild(el("span", "mk", MARK[c.status] || "·"));
+    const body = el("div");
+    body.appendChild(el("div", "tt", c.title));
+    if (c.detail) body.appendChild(el("div", "dt", c.detail));
+    if (c.fix && c.fix !== doctorReport.fix) body.appendChild(el("div", "fx", "→ " + c.fix));
+    row.appendChild(body);
+    list.appendChild(row);
+  }
+
+  fix.hidden = !(n.fail > 0 && doctorReport.fix);
+  document.getElementById("doc-fix-cmd").textContent = doctorReport.fix || "";
+
+  const toggle = el("button", "textbtn", doctorShowAll ? "Yalnızca sorunları göster" : "Tüm kontrolleri göster (" + doctorReport.checks.length + ")");
+  toggle.type = "button";
+  toggle.addEventListener("click", () => { doctorShowAll = !doctorShowAll; renderDoctor(); });
+  actions.appendChild(toggle);
+}
+
+async function loadDoctor(fresh) {
+  if (doctorBusy) return;
+  doctorBusy = true;
+  document.getElementById("doc-run").disabled = true;
+  renderDoctor();
+  try {
+    const r = await fetch("/doctor" + (fresh ? "?fresh=1" : ""), { cache: "no-store" });
+    const d = await r.json();
+    if (d && d.checks) { doctorReport = d; doctorFetchedAt = Date.now(); }
+  } catch (e) { /* proxy kapalıysa üstteki uyarı zaten görünüyor */ }
+  doctorBusy = false;
+  document.getElementById("doc-run").disabled = false;
+  renderDoctor();
+}
+
+document.getElementById("doc-run").addEventListener("click", () => loadDoctor(true));
+document.getElementById("doc-copy").addEventListener("click", async (ev) => {
+  const cmd = document.getElementById("doc-fix-cmd").textContent;
+  try { await navigator.clipboard.writeText(cmd); ev.target.textContent = "Kopyalandı ✓"; }
+  catch (e) { ev.target.textContent = "Kopyalanamadı — komutu elle seçin"; }
+  setTimeout(() => { ev.target.textContent = "Komutu kopyala"; }, 2200);
+});
 
 async function restartProxy() {
   const btn = document.getElementById("restart");
@@ -532,6 +715,7 @@ function wireLaunchers(available) {
 
 tick();
 setInterval(tick, 2000);
+loadDoctor(false);
 </script>
 </body>
 </html>

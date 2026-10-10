@@ -1,0 +1,14 @@
+# GokAI — adb-mcp sunucularının (ai-mcp.py / ps-mcp.py) doğrudan bağımlılıkları.
+# Kurulumda bu dosya DEĞİL, requirements.lock kullanılır (tam sürüm + hash).
+#
+# Kilidi yeniden üretmek için (README › "Sürümleri yükseltme"):
+#   uv pip compile mcp/requirements.in -c mcp/constraints.txt \
+#       --python-version 3.12 --universal --generate-hashes \
+#       --no-header --no-annotate -o mcp/requirements.lock
+fonttools
+mcp[cli]==1.5.0
+numpy
+pillow
+python-socketio
+requests
+websocket-client

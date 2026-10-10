@@ -1,0 +1,4 @@
+# mcp 1.5.0, pydantic'in özel bir iç fonksiyonunu (pydantic._internal._typing_extra
+# .eval_type_backport) içe aktarıyor. pydantic 2.14.0 bu fonksiyonu kaldırdı;
+# o günden beri kilitsiz kurulumlar "ImportError" ile açılmıyor.
+pydantic<2.14

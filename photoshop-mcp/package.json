@@ -1,0 +1,10 @@
+{
+  "name": "gokai-photoshop-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GokAI - sabitlenmis Photoshop MCP sunucusu (@alisaitteke/photoshop-mcp)",
+  "license": "MIT",
+  "dependencies": {
+    "@alisaitteke/photoshop-mcp": "1.7.34"
+  }
+}
