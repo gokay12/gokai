@@ -15,6 +15,7 @@ dokunmadan şunları ekler:
   * "Bağlantı zaman aşımı" yerine neyin eksik olduğunu söyleyen hata iletileri.
   * Komut proxy'ye hiç ulaşmadıysa bir kez yeniden dener (ulaştıysa denemez:
     aynı işlem iki kez çalışmasın).
+  * Yanıt gelir gelmez döner; bağlantının kapanması yanıtı bekletmez.
   * print() çıktıları stdout'a karışıp MCP bağlantısını bozamaz.
 
 Kullanım:
@@ -50,6 +51,8 @@ COMMAND_TIMEOUT = float(os.environ.get("GOKAI_PROXY_TIMEOUT", "55"))
 
 # (Ortam değişkeni yalnızca testler için: gerçek servise dokunmadan denemek.)
 SERVICE_LABEL = os.environ.get("GOKAI_SERVICE_LABEL") or "com.gokai.proxy"
+# Komutun proxy'ye gönderilmesi için tanınan süre (bağlantı + el sıkışma).
+CONNECT_TIMEOUT = 8
 TEST_MODE = os.environ.get("GOKAI_TEST_MODE") == "1"
 NO_AUTOSTART = os.environ.get("GOKAI_NO_AUTOSTART") == "1"
 
@@ -211,6 +214,11 @@ def ensure_proxy(wait_seconds=10.0):
     if proxy_status():
         return True
     with _start_lock:
+        # Port açıksa proxy ayakta ama yanıtı gecikiyor olabilir (makine o an
+        # meşgul: render, büyük dosya…). Öldürüp yeniden başlatmak bağlı
+        # eklentileri düşürür; önce toparlanması için süre tanı.
+        if port_open() and wait_for_proxy(8):
+            return True
         if proxy_status():
             return True
         # Az önce başlatılamadıysa her çağrıda yeniden bekletme.
@@ -226,10 +234,12 @@ def ensure_proxy(wait_seconds=10.0):
 
 def install_guards(app_key, app_label, app_accusative):
     """adb-mcp'nin socket_client modülünü, dosyasına dokunmadan sarmalar."""
+    import queue
+
     import socket_client
+    import socketio
 
     upstream_configure = socket_client.configure
-    upstream_send = socket_client.send_message_blocking
 
     def proxy_down():
         if port_open():
@@ -267,33 +277,131 @@ def install_guards(app_key, app_label, app_accusative):
             % (app_label, app_accusative, PORT)
         )
 
+    def exchange(command, wait_seconds):
+        """Komutu proxy'ye gönderir, sonucu bekler → (tür, veri).
+
+        tür: "response" | "not-sent" | "closed" | "timeout"
+
+        adb-mcp'nin kendi gönderme fonksiyonunun yerini alır (protokol aynı):
+
+          * Onunki bağlanmak için yalnızca 1 saniye bekliyor; makine o an
+            meşgulse sağlam bir proxy "bağlanılamadı" sayılıyordu.
+          * Onunki bağlantıyı bekleyerek kapatıyor; kapanış takılırsa çağrı
+            da takılıyordu. Burada bağlantı arka planda kapatılır.
+          * Komutun gönderilip gönderilmediği kesin olarak bilinir: yalnızca
+            HİÇ gönderilmediyse yeniden denenir (aynı işlem iki kez çalışmaz).
+        """
+        outcome = queue.Queue(maxsize=1)
+        lock = threading.Lock()
+        state = {"emitted": False, "abandoned": False}
+
+        def offer(kind, data=None):
+            try:
+                outcome.put_nowait((kind, data))
+            except queue.Full:
+                pass  # ilk sonuç geçerlidir
+
+        # reconnection=False: bağlantı beklerken koparsa kütüphane yeni bir
+        # kimlikle yeniden bağlanırdı; yanıt eski kimliğe gideceği için asla
+        # gelmezdi. Kopmayı hemen bildirmek daha doğru.
+        sio = socketio.Client(logger=False, reconnection=False)
+
+        @sio.event
+        def connect():
+            with lock:
+                if state["abandoned"]:
+                    return  # vazgeçildi: geç kalan bağlantı komutu GÖNDERMEZ
+                state["emitted"] = True
+            try:
+                sio.emit("command_packet", {
+                    "type": "command",
+                    "application": app_key,
+                    "command": command,
+                })
+            except Exception:
+                offer("closed")  # gönderilip gönderilmediği belirsiz: yeniden deneme
+
+        @sio.on("packet_response")
+        def packet_response(data):
+            offer("response", data)
+
+        @sio.event
+        def connect_error(error):
+            offer("not-sent", error)
+
+        @sio.event
+        def disconnect(*_):
+            offer("closed" if state["emitted"] else "not-sent", "bağlantı kurulurken kesildi")
+
+        def run():
+            try:
+                sio.connect(PROXY_URL, transports=["websocket"], wait_timeout=5)
+                sio.wait()
+            except Exception as error:
+                offer("closed" if state["emitted"] else "not-sent", error)
+
+        def close():
+            try:
+                sio.disconnect()
+            except Exception:
+                pass
+
+        threading.Thread(target=run, daemon=True).start()
+        try:
+            # 1) Bağlantı aşaması: komut bu süre içinde gönderilemediyse vazgeç.
+            try:
+                return outcome.get(timeout=min(CONNECT_TIMEOUT, wait_seconds))
+            except queue.Empty:
+                with lock:
+                    if not state["emitted"]:
+                        state["abandoned"] = True
+                        return ("not-sent", "bağlantı %d saniyede kurulamadı" % CONNECT_TIMEOUT)
+            # 2) Komut gönderildi: yanıtı bekle.
+            try:
+                return outcome.get(timeout=max(wait_seconds - CONNECT_TIMEOUT, 1))
+            except queue.Empty:
+                return ("timeout", None)
+        finally:
+            with lock:
+                state["abandoned"] = True
+            threading.Thread(target=close, daemon=True).start()
+
     def send_message_blocking(command, timeout=None):
         if not ensure_proxy():
             raise RuntimeError(proxy_down())
 
+        wait_seconds = timeout if timeout is not None else COMMAND_TIMEOUT
         for attempt in (1, 2):
-            try:
-                response = upstream_send(command, timeout)
-            except socket_client.AppError:
-                raise  # uygulamanın kendi hatası: olduğu gibi ilet
-            except Exception as error:
-                never_sent = "command proxy server" in str(error)
-                if never_sent and attempt == 1:
+            kind, data = exchange(command, wait_seconds)
+
+            if kind == "response":
+                if not isinstance(data, dict):
+                    raise RuntimeError("%s eklentisinden beklenmeyen bir yanıt geldi." % app_label)
+                if data.get("status") == "FAILURE":
+                    # Uygulamanın (ya da proxy'nin) kendi hatası: olduğu gibi ilet.
+                    raise socket_client.AppError(
+                        "Error returned from %s: %s" % (app_key, data.get("message"))
+                    )
+                return data
+
+            if kind == "not-sent":
+                if attempt == 1:
                     # Komut proxy'ye ulaşmadı; yeniden denemek güvenli.
-                    log("proxy bağlantısı kurulamadı, yeniden deneniyor")
+                    log("proxy bağlantısı kurulamadı (%s), yeniden deneniyor" % data)
                     ensure_proxy()
                     continue
-                if never_sent:
-                    raise RuntimeError(proxy_down()) from None
-                # Zaman aşımı: komut uygulamaya ulaşmış olabilir, YENİDEN DENEME.
-                raise RuntimeError(explain_timeout()) from None
+                raise RuntimeError(proxy_down())
 
-            if response is None:
+            if kind == "closed":
+                # Komut gönderildi ama bağlantı yanıttan önce kesildi: uygulamaya
+                # ulaşmış olabilir, YENİDEN DENEME (aynı işlem iki kez çalışmasın).
                 raise RuntimeError(
                     "%s ile bağlantı, yanıt gelmeden kesildi. İşlem tamamlanmamış olabilir; "
                     "belgeyi kontrol edip yeniden deneyin." % app_label
                 )
-            return response
+
+            # Zaman aşımı: komut uygulamaya ulaşmış olabilir, YENİDEN DENEME.
+            raise RuntimeError(explain_timeout())
 
     socket_client.configure = configure
     socket_client.send_message_blocking = send_message_blocking

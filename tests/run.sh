@@ -14,6 +14,8 @@
 # Ne dener:
 #   install   kurulum senaryoları: yeniden çalıştırma, internet kesintisi, bozuk
 #             Claude ayarı, yarıda kesilme, kesilmiş yer değiştirmeyi geri alma
+#             + normal Photoshop'lu makinede UXP eklenti adımı (sahte Adobe
+#             kurucusuyla: başarı, hata kodu, Photoshop açık/eski, takılma)
 #   proxy     gerçek MCP sunucusu → proxy → sahte eklenti: kopma, çift kayıt,
 #             hatalı paket, yabancı kaynak, proxy'nin kendiliğinden başlatılması
 #   offline   sunucular ağ erişimi tamamen kapalıyken açılıyor mu

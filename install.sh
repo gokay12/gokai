@@ -32,7 +32,7 @@
 # yalnızca ana kabukta ve yalnızca bir kez çalışır.
 set -euo pipefail
 
-GOKAI_VERSION="2.0.0"
+GOKAI_VERSION="2.0.1"
 
 # ------------------------------------------------- sabitlenmiş sürümler ---
 # Buradaki her şey bilinçli olarak sabit. Yükseltmek için README'deki
@@ -58,6 +58,9 @@ CEP_UPSTREAM_MAIN_SHA256="dfaae854f26ad03f973e1cb8fdcadff3e9d57a125116ec79ceabed
 CEP_UPSTREAM_INDEX_SHA256="d347e76a1e652523fe600564d6e2a0ee3b1a4b1424475d637f30f81ad23cefbb"
 
 PS_CCX_URL="https://github.com/mikechambers/adb-mcp/releases/download/v0.85.4/Photoshop.MCP.Agent_PS.ccx"
+PS_PLUGIN_NAME="Photoshop MCP Agent"
+# .ccx içindeki manifest: host.minVersion 26.0.0 — eklenti Photoshop 2025 (26) ve üzerinde yüklenir.
+PS_PLUGIN_MIN_MAJOR=26
 
 # ---------------------------------------------------------------- ayarlar ---
 FORCE=0
@@ -574,13 +577,29 @@ stage_all() {
 
 # Normal (Beta olmayan) Photoshop var mı? Yoksa UXP eklentisi kurulamaz, dolayısıyla
 # ona bağlı MCP sunucusunu hiç ekleme — Claude'da hiç bağlanmayan bir sunucu görünmesin.
+# Klasörün var olması yetmez: kaldırılmış bir sürümden kalan boş klasör de
+# "Adobe Photoshop 2025" adını taşır. İçinde gerçekten uygulama olmalı.
 HAS_STABLE_PS=0
+PS_STABLE_VERSION=""      # kurulu normal Photoshop'ların en yükseği (ör. 27.1.0)
 for d in /Applications/Adobe\ Photoshop*; do
   case "$d" in
-    *"(Beta)"*) ;;
-    *) if [ -d "$d" ]; then HAS_STABLE_PS=1; fi ;;
+    *"(Beta)"*|*Elements*|*Lightroom*) continue ;;     # bunlar "normal Photoshop" değil
   esac
+  for app in "$d"/Adobe\ Photoshop*.app; do
+    if [ ! -d "$app/Contents/MacOS" ]; then continue; fi
+    HAS_STABLE_PS=1
+    v="$(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)"
+    case "${v%%.*}" in
+      ''|*[!0-9]*) continue ;;      # sürüm okunamadı
+    esac
+    if [ -z "$PS_STABLE_VERSION" ] || [ "${v%%.*}" -gt "${PS_STABLE_VERSION%%.*}" ]; then PS_STABLE_VERSION="$v"; fi
+  done
 done
+# (Yalnızca test: normal Photoshop'u olan bir makineyi taklit et.)
+if [ "$TEST_MODE" = "1" ] && [ -n "${GOKAI_TEST_STABLE_PS_VERSION:-}" ]; then
+  HAS_STABLE_PS=1
+  PS_STABLE_VERSION="$GOKAI_TEST_STABLE_PS_VERSION"
+fi
 
 # ------------------------------------------ 8. Yerine koymadan önce dene ---
 # Yeni sunucuları, Claude'un yapacağı gibi başlatıp el sıkışma yap. Burada
@@ -905,46 +924,171 @@ fi
 # ------------------------------------------- Photoshop eklentisi (UXP/.ccx) ---
 # Adobe'nin resmi komut satırı kurucusuyla (UPIA) .ccx paketini kurar.
 # Başarılı olursa KALICIDIR — UXP Developer Tools'a hiç gerek kalmaz.
-# Photoshop Beta'da çalışmaz (Adobe Beta'yı geçerli hedef saymıyor); o durumda
-# aşağıdaki uyarı çıkar ve UDT ile elle kurulur.
+# Photoshop Beta'da çalışmaz (Adobe Beta'yı geçerli hedef saymıyor).
+#
+# DİKKAT: UPIA başarısız olduğunda da 0 çıkış koduyla biter; sonucu yalnızca
+# yazdığı satırdan ("Failed to install, status = -411!") anlaşılır. Çıktısı
+# bu yüzden günlüğe yazılır ve neden kullanıcıya gösterilir.
 UPIA="/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent"
+PS_CCX_SRC="$PS_CCX_URL"
+if [ "$TEST_MODE" = "1" ]; then
+  # Test: gerçek Adobe kurucusuna dokunma; sahte bir kurucu verilmişse onu kullan.
+  UPIA="${GOKAI_TEST_UPIA:-}"
+  PS_CCX_SRC="${GOKAI_TEST_CCX_URL:-$PS_CCX_URL}"
+fi
 PS_CCX="$GOKAI_DIR/Photoshop_MCP_Agent.ccx"
 UXP_EXTERNAL="$HOME/Library/Application Support/Adobe/UXP/Plugins/External"
+UPIA_OUT="$GOKAI_DIR/.upia-output.txt"
+
+# Sonuç: doktor ve panel "neden kurulmadı"yı buradan okur (install.json'a yazılır).
+PS_PLUGIN_STATE="not-applicable"     # installed | not-applicable | ps-too-old | no-installer |
+                                     # ps-running | download-failed | failed | timeout
+PS_PLUGIN_STATUS=""                  # UPIA'nın durum kodu (ör. -411)
+PS_PLUGIN_NOTE=""                    # kullanıcıya gösterilen neden + ne yapmalı
 
 ps_plugin_installed() {
-  [ -n "$(find "$UXP_EXTERNAL" -maxdepth 1 -iname '*Photoshop MCP Agent*' 2>/dev/null || true)" ]
+  [ -n "$(find "$UXP_EXTERNAL" -maxdepth 1 -iname "*$PS_PLUGIN_NAME*" 2>/dev/null || true)" ]
 }
 
-if [ "$TEST_MODE" = "1" ]; then
+# Normal Photoshop şu an açık mı? Yalnızca ana uygulamaya bakar: Adobe'nin
+# arka plan yardımcıları da yolunda "Adobe Photoshop 2026" taşır ve uygulama
+# kapalıyken bile `pgrep -f "Adobe Photoshop [0-9]"` ile eşleşebilir.
+stable_photoshop_running() {
+  if [ "$TEST_MODE" = "1" ]; then
+    [ "${GOKAI_TEST_PS_RUNNING:-0}" = "1" ]
+    return
+  fi
+  local procs
+  procs="$(ps -Ao comm= | grep -E '/Adobe Photoshop [0-9][^/]*/Adobe Photoshop [0-9][^/]*\.app/Contents/MacOS/Adobe Photoshop [0-9][^/]*$' || true)"
+  [ -n "$procs" ]
+}
+
+# UPIA'yı süre sınırıyla çalıştırır (bazen takılıyor); çıktısını saklar.
+run_upia() { # süre-sn  argümanlar...
+  local limit="$1"; shift
+  : >"$UPIA_OUT"
+  "$UPIA" "$@" </dev/null >"$UPIA_OUT" 2>&1 &
+  local pid=$! n=0
+  while kill -0 "$pid" 2>/dev/null && [ "$n" -lt "$limit" ]; do sleep 1; n=$((n + 1)); done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    echo "GOKAI_TIMEOUT: $limit saniyede bitmedi, durduruldu" >>"$UPIA_OUT"
+  fi
+  wait "$pid" 2>/dev/null || true
+  { echo "--- UPIA $1 ---"; cat "$UPIA_OUT"; } >>"$ILOG"
+}
+
+# Eklenti hem diskte hem Adobe'nin kayıtlarında mı? İkisi de tamamsa kurulu ve
+# sağlam demektir; kaldırıp yeniden kurmak (yeniden kurulum başarısız olursa)
+# çalışan bir eklentiyi yok etmekten başka işe yaramaz.
+ps_plugin_registered() {
+  ps_plugin_installed || return 1
+  run_upia 20 --list all
+  grep -qi "$PS_PLUGIN_NAME" "$UPIA_OUT" 2>/dev/null
+}
+
+# UPIA'nın son yazdığı durum kodu (yoksa boş).
+upia_status() { sed -n 's/.*status = \(-\{0,1\}[0-9][0-9]*\).*/\1/p' "$UPIA_OUT" | tail -1; }
+
+# Durum kodunun anlamı ve ne yapılacağı (Adobe'nin eklenti kurucusu hata kodları).
+upia_reason() {
+  local again="Sonra kurulum komutunu tekrar çalıştırın."
+  case "$1" in
+    -411|-458) echo "Adobe kurucusu bu eklentiyle uyumlu bir Photoshop bulamadı (durum kodu $1). Creative Cloud uygulaması bu Photoshop'u tanımıyor olabilir: Creative Cloud'u açıp oturum açın ve Photoshop'u oradan güncelleyin. $again" ;;
+    -459)      echo "Kurulu Photoshop sürümü eklentiyle uyumlu değil (durum kodu $1): Photoshop 2025 (v$PS_PLUGIN_MIN_MAJOR) ve üzeri gerekir. Photoshop'u güncelleyin. $again" ;;
+    -456)      echo "Bir Adobe uygulaması açık olduğu için kurulamadı (durum kodu $1). Photoshop'u kapatın. $again" ;;
+    -412|-418) echo "Aynı adlı bir eklenti zaten kayıtlı ama dosyaları yerinde değil (durum kodu $1). Creative Cloud › Eklentileri yönet bölümünden \"$PS_PLUGIN_NAME\" eklentisini kaldırın. $again" ;;
+    "")        echo "Adobe eklenti kurucusu bir sonuç bildirmedi. Creative Cloud uygulamasını açın. $again" ;;
+    *)         echo "Adobe eklenti kurucusu hata verdi (durum kodu $1). Bu kodu kurulumu yapan kişiye iletin." ;;
+  esac
+}
+
+if [ "$TEST_MODE" = "1" ] && [ -z "$UPIA" ]; then
   skip "Test modu: Photoshop eklentisi adımı atlandı"
 elif [ "$HAS_STABLE_PS" -eq 0 ]; then
   skip "Photoshop Beta — .ccx kurulumu gerekmiyor (AppleScript sunucusu eklenti istemez)"
+elif [ -n "$PS_STABLE_VERSION" ] && [ "${PS_STABLE_VERSION%%.*}" -lt "$PS_PLUGIN_MIN_MAJOR" ]; then
+  PS_PLUGIN_STATE="ps-too-old"
+  PS_PLUGIN_NOTE="Photoshop $PS_STABLE_VERSION bu eklenti için eski: eklenti Photoshop 2025 (v$PS_PLUGIN_MIN_MAJOR) ve üzerinde yüklenir. Photoshop'u Creative Cloud'dan güncelleyip kurulumu tekrar çalıştırın."
 elif [ ! -x "$UPIA" ]; then
-  warn "Adobe eklenti kurucusu bulunamadı — Photoshop eklentisi elle kurulmalı"
-elif pgrep -f "Adobe Photoshop [0-9]" >/dev/null 2>&1; then
+  PS_PLUGIN_STATE="no-installer"
+  PS_PLUGIN_NOTE="Adobe eklenti kurucusu bu makinede yok (Creative Cloud uygulaması kurulu ve güncel mi?). Creative Cloud'u kurup/güncelleyip kurulumu tekrar çalıştırın."
+elif stable_photoshop_running; then
   if ps_plugin_installed; then
+    PS_PLUGIN_STATE="installed"
     ok "Photoshop eklentisi zaten kurulu (Photoshop açık olduğu için yenilenmedi)"
   else
-    warn "Photoshop açık — eklenti kurulamadı. Photoshop'u kapatıp kurulumu tekrar çalıştırın."
+    PS_PLUGIN_STATE="ps-running"
+    PS_PLUGIN_NOTE="Photoshop açık olduğu için eklenti kurulamadı. Photoshop'u kapatıp kurulum komutunu tekrar çalıştırın (bu kez saniyeler sürer)."
   fi
+elif ps_plugin_registered; then
+  PS_PLUGIN_STATE="installed"
+  ok "Photoshop eklentisi zaten kurulu"
 else
-  fetch "$PS_CCX_URL" "$PS_CCX" || true
-  if [ -s "$PS_CCX" ]; then
-    # UPIA bazen takılıyor: arka planda çalıştırıp süre sınırı koy.
-    # Ayrıca eski bir kayıt varsa önce kaldır — yoksa "başarılı" deyip dosya yazmıyor.
-    ( "$UPIA" --remove "Photoshop MCP Agent" </dev/null >/dev/null 2>&1 & sleep 20; kill %1 2>/dev/null ) >/dev/null 2>&1 || true
-    ( "$UPIA" --install "$PS_CCX" </dev/null >/dev/null 2>&1 & sleep 40; kill %1 2>/dev/null ) >/dev/null 2>&1 || true
-    if ps_plugin_installed; then
-      ok "Photoshop eklentisi kalıcı olarak kuruldu (UDT gerekmiyor)"
-    else
-      warn "Photoshop eklentisi otomatik kurulamadı."
-      warn "Elle kurulum: UXP Developer Tools › Add Plugin ›"
-      warn "  $GOKAI_DIR/adb-mcp/uxp/ps/manifest.json  → Load"
-    fi
+  # İndirme başarısız olursa eldeki eski kopya kullanılır (fetch yarım dosya bırakmaz).
+  fetch "$PS_CCX_SRC" "$PS_CCX" || true
+  if [ ! -s "$PS_CCX" ]; then
+    PS_PLUGIN_STATE="download-failed"
+    PS_PLUGIN_NOTE="Eklenti paketi indirilemedi (internet?). Kurulum komutunu tekrar çalıştırın."
   else
-    warn "Photoshop eklenti paketi indirilemedi (internet?) — kurulumu tekrar çalıştırın"
+    # Buraya yalnızca eklenti eksik ya da yarım (dosya var / kayıt yok, ya da tersi)
+    # ise gelinir. Eski bir kayıt varsa önce kaldır — yoksa UPIA "başarılı" deyip
+    # dosya yazmıyor.
+    run_upia 30 --remove "$PS_PLUGIN_NAME"
+    UPIA_LIMIT=90
+    if [ "$TEST_MODE" = "1" ]; then UPIA_LIMIT="${GOKAI_TEST_UPIA_TIMEOUT:-90}"; fi
+    for attempt in 1 2; do
+      run_upia "$UPIA_LIMIT" --install "$PS_CCX"
+      # UPIA bittikten sonra dosyaların yerine oturmasını kısa süre bekle
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        if ps_plugin_installed; then break; fi
+        sleep 1
+      done
+      if ps_plugin_installed; then break; fi
+      PS_PLUGIN_STATUS="$(upia_status)"
+      case "$PS_PLUGIN_STATUS" in
+        -411|-458|-459|-456) break ;;     # yeniden denemek sonucu değiştirmez
+      esac
+      if grep -q "GOKAI_TIMEOUT" "$UPIA_OUT" 2>/dev/null; then break; fi   # takıldı: bir daha bekletme
+      if [ "$attempt" -eq 1 ]; then sleep 3; fi
+    done
+    if ps_plugin_installed; then
+      PS_PLUGIN_STATE="installed"
+      PS_PLUGIN_STATUS=""
+      ok "Photoshop eklentisi kalıcı olarak kuruldu (UDT gerekmiyor)"
+    elif grep -q "GOKAI_TIMEOUT" "$UPIA_OUT" 2>/dev/null; then
+      PS_PLUGIN_STATE="timeout"
+      PS_PLUGIN_NOTE="Adobe eklenti kurucusu yanıt vermedi. Creative Cloud uygulamasını açıp kurulum komutunu tekrar çalıştırın."
+    else
+      PS_PLUGIN_STATE="failed"
+      PS_PLUGIN_NOTE="$(upia_reason "$PS_PLUGIN_STATUS")"
+    fi
   fi
 fi
+rm -f "$UPIA_OUT"
+
+if [ -n "$PS_PLUGIN_NOTE" ]; then
+  warn "Photoshop eklentisi (UXP) KURULAMADI"
+  warn "  $PS_PLUGIN_NOTE"
+fi
+
+# Sonucu install.json'a ekle: doktor ve panel nedeni buradan gösterir.
+GOKAI_DIR="$GOKAI_DIR" PS_PLUGIN_STATE="$PS_PLUGIN_STATE" PS_PLUGIN_STATUS="$PS_PLUGIN_STATUS" \
+PS_PLUGIN_NOTE="$PS_PLUGIN_NOTE" PS_STABLE_VERSION="$PS_STABLE_VERSION" \
+"$NODE" - <<'PLUGIN_EOF' || true
+const fs = require("fs"), path = require("path"), e = process.env;
+const file = path.join(e.GOKAI_DIR, "install.json");
+const info = JSON.parse(fs.readFileSync(file, "utf8"));
+info.photoshopVersion = e.PS_STABLE_VERSION || null;
+info.photoshopPlugin = {
+  state: e.PS_PLUGIN_STATE,
+  upiaStatus: e.PS_PLUGIN_STATUS || null,
+  note: e.PS_PLUGIN_NOTE || null,
+  at: new Date().toISOString(),
+};
+fs.writeFileSync(file + ".tmp", JSON.stringify(info, null, 2) + "\n");
+fs.renameSync(file + ".tmp", file);
+PLUGIN_EOF
 
 # ----------------------------------------------------- GokAI.app kısayolu ---
 APP="$HOME/Applications/GokAI.app"
@@ -988,7 +1132,16 @@ if [ "$DOCTOR" -ne 0 ]; then
   exit 1
 fi
 
-printf "\033[1;32mKurulum tamamlandı ve doğrulandı!\033[0m\n\n"
+if [ -n "$PS_PLUGIN_NOTE" ]; then
+  # Eksik kalan bir şey varsa "her şey tamam" deme; en sonda, gözden kaçmayacak yerde söyle.
+  printf "\033[1;33mKurulum tamamlandı — bir eksikle:\033[0m\n\n"
+  printf "  \033[33m!\033[0m \033[1mPhotoshop eklentisi (UXP) kurulamadı.\033[0m\n"
+  echo "    $PS_PLUGIN_NOTE"
+  echo "    (Bu arada 'GokAI Photoshop' sunucusu eklentisiz çalışır; eksik olan 'GokAI Photoshop Plugin'.)"
+  echo ""
+else
+  printf "\033[1;32mKurulum tamamlandı ve doğrulandı!\033[0m\n\n"
+fi
 echo "Sonraki adımlar (makine başına bir kez):"
 if [ "$CLAUDE_RUNNING" -eq 1 ]; then
   printf "  1. \033[1;33mClaude açıkken kuruldu:\033[0m Claude Desktop'ı Cmd+Q ile kapatıp açın; sunucular\n"
@@ -998,8 +1151,10 @@ else
 fi
 echo "  2. Illustrator: yeniden başlat → bir dosya aç → Pencere › Uzantılar › Illustrator MCP Agent"
 echo "     (panel açılınca kendiliğinden bağlanır; açık bıraktığınız sürece her seferinde bağlanır)"
-if [ "$HAS_STABLE_PS" -eq 1 ]; then
+if [ "$HAS_STABLE_PS" -eq 1 ] && [ "$PS_PLUGIN_STATE" = "installed" ]; then
   echo "  3. Photoshop: yeniden başlat → Eklentiler › Photoshop MCP Agent → Connect → Connect on Launch ✓"
+elif [ "$HAS_STABLE_PS" -eq 1 ]; then
+  echo "  3. Photoshop: önce yukarıdaki eklenti eksiğini giderin"
 else
   echo "  3. Photoshop: yapacak bir şey yok — Beta'da eklentisiz çalışır"
 fi

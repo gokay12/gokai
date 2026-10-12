@@ -122,10 +122,16 @@ Bağlantının kendisi için eklenenler:
 - **Eklentiler süresiz yeniden bağlanır.** Proxy yeniden başlasa ya da Mac uykudan
   uyansa da elle Connect gerekmez. Komut sürerken bağlantı anlık koparsa yanıt
   kaybolmaz, yeniden bağlanınca iletilir.
+- **Makine meşgulken komut düşmez.** Render ya da büyük dosya sırasında proxy
+  birkaç saniye yanıt veremezse komut bekler ve proxy toparlanınca tamamlanır.
+  (adb-mcp bağlanmak için yalnızca 1 sn bekliyordu; sağlam proxy "bozuk" sayılıyordu.)
+  Komut yalnızca *hiç gönderilmediyse* yeniden denenir — aynı işlem iki kez çalışmaz.
 - **Eklenti bağlı değilse komut 20 sn asılı kalmaz;** Claude'a nedenini söyleyen
   bir hata hemen döner ("Illustrator açık değil", "eklenti bağlı değil", "uygulama
   yanıt vermiyor — açık bir iletişim kutusu olabilir").
-- Uzun işlemler için zaman aşımı 20 → 55 sn; ping toleransı 20 → 90 sn.
+- Uzun işlemler için zaman aşımı 20 → 55 sn; ping toleransı 20 → 45 sn.
+- Yanıt gelir gelmez Claude'a döner; bağlantının kapanması yanıtı bekletmez
+  (adb-mcp'de kapanış takılırsa başarılı komut bile bir dakikadan fazla asılı kalabiliyordu).
 - adb-mcp bozuk bir yazı tipinde `stdout`'a yazıp MCP bağlantısını bozabiliyordu;
   başlatıcı bunu `stderr`'e yönlendirir.
 - Hatalı bir paket ya da beklenmeyen bir istisna proxy'yi düşüremez.
@@ -219,6 +225,16 @@ Yalnızca kurulumu elle denemek için:
 - **Illustrator'da "Illustrator MCP Agent" menüde yok** → Illustrator 2024 (28) ve
   üzeri gerekir; kurulumdan sonra Illustrator'ı yeniden başlat.
 - **Claude araçları görmüyor** → Claude Desktop Cmd+Q ile tamamen kapatılıp açıldı mı?
+- **Photoshop eklentisi (UXP) kurulmadı** (normal Photoshop'lu makine) → Kurulum
+  nedenini en sonda yazar; doktor da gösterir. Sık nedenler:
+  - *Photoshop açıktı* → kapat, kurulum komutunu tekrar çalıştır (bu kez saniyeler sürer).
+  - *Photoshop eski* → eklenti Photoshop 2025 (v26) ve üzerinde yüklenir.
+  - *Durum kodu -411* → Adobe'nin kurucusu o Photoshop'u tanımıyor: Creative Cloud
+    uygulamasını aç, oturum aç, Photoshop'u oradan güncelle; sonra tekrar çalıştır.
+  - Olmuyorsa elle: `~/Library/Application Support/GokAI/Photoshop_MCP_Agent.ccx`
+    dosyasına çift tıkla, Creative Cloud açılınca **Yükle**'ye bas.
+
+  Eklenti kurulana kadar `GokAI Photoshop` (AppleScript) sunucusu yine çalışır.
 - **Photoshop araçları "izin verilmedi" (not authorized / -1743) diyor** → İlk kullanımda
   macOS *"Claude, Adobe Photoshop'u denetlemek istiyor"* diye sorar; reddedildiyse
   **Sistem Ayarları › Gizlilik ve Güvenlik › Otomasyon › Claude › Adobe Photoshop**
@@ -241,6 +257,9 @@ Yalnızca kurulumu elle denemek için:
   sürdürülebilir olmadığından kapsam dışı bırakıldı.
 - Photoshop Beta'da UXP eklentisi kurulamaz (yukarıda açıklandı) — AppleScript
   sunucusu bu boşluğu tamamen dolduruyor.
+- Photoshop UXP eklentisi **Photoshop 2025 (v26) ve üzerini** ister. Adobe'nin
+  kurucusu (UPIA) başarısız olduğunda da başarılı gibi çıkar; kurulum bu yüzden
+  yazdığı durum kodunu okuyup nedenini gösterir.
 - Illustrator eklentisi yalnızca **paneli açıkken** çalışır (CEP sınırı). Paneli
   kapatırsan bağlantı kopar; yeniden açınca kendiliğinden bağlanır.
 - Photoshop UXP eklentisi (`.ccx`) adb-mcp'nin hazır paketidir; bağlantı

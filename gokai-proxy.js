@@ -51,7 +51,7 @@ const os = require("os");
 const { execFile } = require("child_process");
 const { Server } = require("socket.io");
 
-const VERSION = "2.0.0";
+const VERSION = "2.0.1";
 const PORT = parseInt(process.env.GOKAI_PORT || "3001", 10);
 const START_TIME = Date.now();
 
@@ -131,8 +131,11 @@ const io = new Server(server, {
     maxHttpBufferSize: 50 * 1024 * 1024,
     // Uzun bir işlem sırasında eklentinin JS iş parçacığı bir süre yanıt
     // veremeyebilir; varsayılan 20 sn'lik ping süresi bağlantıyı boşuna koparır.
-    pingInterval: 20000,
-    pingTimeout: 90000,
+    // Toplam 70 sn: tek bir komutun azami süresinin (55 sn) biraz üstü. Daha
+    // uzun tutma — bu değer, karşı tarafı kaybolmuş bir bağlantının ne kadar
+    // geç fark edileceğini de belirler.
+    pingInterval: 25000,
+    pingTimeout: 45000,
     allowRequest: (req, callback) => callback(null, isLocalHostHeader(req)),
 });
 

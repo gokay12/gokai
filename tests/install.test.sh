@@ -98,6 +98,72 @@ check "eksik parçayı fark edip durdu (kod $RC)" "[ $RC -eq 1 ] && grep -q 'haz
 check "çalışan kuruluma dokunulmadı" "intact && [ $M0 -eq \$(stat -f %m '$G/install.json') ] && doctor_ok"
 rm -rf "$S/sabote" "$S/install-sabote.sh"
 
+# ---------------------------------------------------------------------------
+# Normal (Beta olmayan) Photoshop'lu makine: UXP eklenti adımı.
+# Bu makinede normal Photoshop olmayabilir; sahte bir Adobe kurucusu
+# (tests/fake-upia.sh) ve GOKAI_TEST_STABLE_PS_VERSION ile taklit edilir.
+FAKE="$R/tests/fake-upia.sh"
+CCX="$S/sahte.ccx"; echo "sahte eklenti paketi" >"$CCX"
+CALLS="$S/upia.calls"
+UXP_EXT="$H/Library/Application Support/Adobe/UXP/Plugins/External"
+ps_env() { echo GOKAI_TEST_UPIA="$FAKE" GOKAI_TEST_CCX_URL="file://$CCX" GOKAI_TEST_UPIA_TIMEOUT=3 GOKAI_FAKE_UPIA_LOG="$CALLS"; }
+ps_install() { : >"$CALLS"; install env GOKAI_TEST_UPIA="$FAKE" GOKAI_TEST_CCX_URL="file://$CCX" GOKAI_TEST_UPIA_TIMEOUT=3 GOKAI_FAKE_UPIA_LOG="$CALLS" "$@"; }
+plugin() { /usr/bin/python3 -c "import json,sys; print((json.load(open(sys.argv[1])).get('photoshopPlugin') or {}).get(sys.argv[2]) or '')" "$G/install.json" "$1"; }
+has_plugin_entry() { grep -q '"GokAI Photoshop Plugin"' "$CFG"; }
+doctor_line() {  # ortam değişkenleri…  → doktorun Photoshop eklentisi satırı (durum:başlık)
+  env HOME="$H" GOKAI_TEST_MODE=1 GOKAI_PORT=$PORT GOKAI_DIR="$G" GOKAI_CLAUDE_CONFIG="$CFG" GOKAI_TEST_UPIA="$FAKE" "$@" \
+    "$G/node/bin/node" "$G/proxy/gokai-doctor.js" --quick --json 2>/dev/null \
+    | /usr/bin/python3 -c "import json,sys; d=json.load(sys.stdin); print(' | '.join(c['status']+':'+c['title'] for c in d['checks'] if 'eklentisi (UXP)' in c['title']))"
+}
+
+echo ""; echo "== P1. Normal Photoshop 27 + Adobe kurucusu başarılı =="
+rm -rf "$UXP_EXT"
+ps_install GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_MODE=ok; RC=$?
+check "kurulum başarılı, eklenti kuruldu" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = installed ] && grep -q 'kalıcı olarak kuruldu' '$LOG' && grep -q 'tamamlandı ve doğrulandı' '$LOG'" "state=$(plugin state)"
+check "Claude'a 'GokAI Photoshop Plugin' eklendi ve sunucusu denendi" "has_plugin_entry && grep -q 'GokAI Photoshop Plugin: açıldı' '$LOG'"
+check "doktor: eklenti kurulu" "[ \"\$(doctor_line GOKAI_TEST_STABLE_PS_VERSION=27.1.0)\" = 'ok:Photoshop eklentisi (UXP) kurulu' ]" "$(doctor_line GOKAI_TEST_STABLE_PS_VERSION=27.1.0)"
+check "doktor: kurulu ama devre dışıysa söyler" "doctor_line GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_LIST_STATUS=Disabled | grep -q 'warn:.*devre dışı'"
+
+echo ""; echo "== P1b. Eklenti zaten kurulu ve kayıtlıyken yeniden çalıştırma =="
+# Kurucu bu kez başarısız olacak şekilde ayarlı: çağrılırsa çalışan eklentiyi kaybederiz.
+ps_install GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_MODE=fail411; RC=$?
+check "çalışan eklentiye dokunulmadı (kaldır/kur çağrılmadı)" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = installed ] && ! grep -q -E -- '--(remove|install)' '$CALLS' && [ -d '$UXP_EXT/Photoshop MCP Agent_0.85.3' ] && grep -q 'zaten kurulu' '$LOG'" "state=$(plugin state) çağrılar: $(tr '\n' ';' <"$CALLS")"
+
+echo ""; echo "== P2. Adobe kurucusu başarısız (durum kodu -411; çıkış kodu yine 0) =="
+rm -rf "$UXP_EXT"
+ps_install GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_MODE=fail411; RC=$?
+check "neden yakalandı ve gösterildi" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = failed ] && [ \"\$(plugin upiaStatus)\" = -411 ] && grep -q 'KURULAMADI' '$LOG' && grep -q 'durum kodu -411' '$LOG'" "state=$(plugin state) status=$(plugin upiaStatus)"
+check "kurulum sonunda 'her şey tamam' denmiyor, eksik en sonda söyleniyor" "grep -q 'bir eksikle' '$LOG' && ! grep -q 'tamamlandı ve doğrulandı' '$LOG'"
+check "doktor: nedenini söyleyen uyarı (hata değil)" "doctor_line GOKAI_TEST_STABLE_PS_VERSION=27.1.0 | grep -q '^warn:Photoshop eklentisi (UXP) kurulu değil'" "$(doctor_line GOKAI_TEST_STABLE_PS_VERSION=27.1.0)"
+check "doktor: Creative Cloud Photoshop'u tanımıyorsa bunu söyler" "doctor_line GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_NO_PS=1 | grep -q 'tanımıyor'"
+
+echo ""; echo "== P3. Photoshop açıkken =="
+ps_install GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_MODE=ok GOKAI_TEST_PS_RUNNING=1; RC=$?
+check "kurucu çağrılmadı, neden açıkça söylendi" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = ps-running ] && ! grep -q -- '--install' '$CALLS' && grep -q 'Photoshop açık olduğu için' '$LOG'" "state=$(plugin state)"
+
+echo ""; echo "== P4. Photoshop eklenti için eski (v25) =="
+ps_install GOKAI_TEST_STABLE_PS_VERSION=25.9.1 GOKAI_FAKE_UPIA_MODE=ok; RC=$?
+check "kurucu çağrılmadı, sürüm nedeni söylendi" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = ps-too-old ] && ! grep -q -E -- '--(remove|install)' '$CALLS' && grep -q 'Photoshop 25.9.1 bu eklenti için eski' '$LOG'" "state=$(plugin state)"
+check "doktor: sürüm nedeniyle kurulamaz" "doctor_line GOKAI_TEST_STABLE_PS_VERSION=25.9.1 | grep -q 'warn:.*25.9.1 eski'" "$(doctor_line GOKAI_TEST_STABLE_PS_VERSION=25.9.1)"
+
+echo ""; echo "== P5. Adobe kurucusu takılırsa =="
+T0=$(date +%s)
+ps_install GOKAI_TEST_STABLE_PS_VERSION=27.1.0 GOKAI_FAKE_UPIA_MODE=hang; RC=$?
+check "süre sınırında durduruldu, kurulum asılı kalmadı ($(( $(date +%s) - T0 )) sn)" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = timeout ] && [ $(( $(date +%s) - T0 )) -lt 40 ]" "state=$(plugin state)"
+check "takılan kurucu süreci geride kalmadı" "! pgrep -f 'sleep 600' >/dev/null"
+
+echo ""; echo "== P6. Adobe kurucusu yok / paket indirilemiyor =="
+: >"$CALLS"; install env GOKAI_TEST_UPIA="/yok/boyle/bir/kurucu" GOKAI_TEST_CCX_URL="file://$CCX" GOKAI_TEST_STABLE_PS_VERSION=27.1.0; RC=$?
+check "kurucu yoksa: neden söylendi" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = no-installer ]" "state=$(plugin state)"
+rm -f "$G/Photoshop_MCP_Agent.ccx"
+: >"$CALLS"; install env GOKAI_TEST_UPIA="$FAKE" GOKAI_TEST_CCX_URL="file://$S/yok.ccx" GOKAI_FAKE_UPIA_LOG="$CALLS" GOKAI_TEST_STABLE_PS_VERSION=27.1.0; RC=$?
+check "paket indirilemezse: neden söylendi, kurucu çağrılmadı" "[ $RC -eq 0 ] && [ \"\$(plugin state)\" = download-failed ] && ! grep -q -E -- '--(remove|install)' '$CALLS'" "state=$(plugin state)"
+
+echo ""; echo "== P7. Yeniden yalnızca Beta'lı makine =="
+install; RC=$?
+check "eski 'GokAI Photoshop Plugin' girdisi kaldırıldı" "[ $RC -eq 0 ] && ! has_plugin_entry && [ \"\$(plugin state)\" = not-applicable ]" "state=$(plugin state)"
+rm -rf "$UXP_EXT"
+
 kill_proxy
 echo ""
 if [ "$FAIL" -eq 0 ]; then echo "TÜM KURULUM SENARYOLARI GEÇTİ ($PASS geçti)"; else echo "$FAIL SENARYO KONTROLÜ BAŞARISIZ ($PASS geçti)"; fi

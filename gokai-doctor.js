@@ -24,7 +24,7 @@ const path = require("path");
 const http = require("http");
 const { spawn, execFile } = require("child_process");
 
-const DOCTOR_VERSION = "2.0.0";
+const DOCTOR_VERSION = "2.0.1";
 const SERVICE_LABEL = "com.gokai.proxy";
 // Kurulum betiği yeni sürümü önce hazırlayıp dener, sonra yerine koyar; bu yüzden
 // onarım için de güvenle çalıştırılabilir (reset.sh'ın aksine önce silmez).
@@ -33,6 +33,11 @@ const FIX_CMD =
 
 // Illustrator CEP eklentisinin manifest'i 28.0 (2024) ve üzerini hedefliyor.
 const MIN_ILLUSTRATOR_MAJOR = 28;
+// Photoshop UXP eklentisinin (.ccx) manifest'i 26.0 (2025) ve üzerini hedefliyor.
+const MIN_PHOTOSHOP_PLUGIN_MAJOR = 26;
+// Adobe'nin eklenti kurucusu (Creative Cloud ile gelir).
+const UPIA_PATH = "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/" +
+    "UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent";
 
 // ------------------------------------------------------------------ yollar ---
 
@@ -113,6 +118,27 @@ function fmtMs(ms) {
 function tail(text, lines) {
     const arr = String(text || "").split("\n").filter((l) => l.trim() !== "");
     return arr.slice(-lines).join("\n");
+}
+
+// Normal (Beta olmayan) Photoshop uygulamaları. Klasörün var olması yetmez:
+// kaldırılmış bir sürümden kalan boş "Adobe Photoshop 2025" klasörü sayılmaz;
+// Elements ve Lightroom da "Adobe Photoshop …" adını taşır ama Photoshop değildir.
+function stablePhotoshopApps() {
+    const out = [];
+    let names = [];
+    try { names = fs.readdirSync("/Applications"); } catch (e) { return out; }
+    for (const n of names) {
+        if (!/^Adobe Photoshop/.test(n) || /\(Beta\)|Elements|Lightroom/.test(n)) continue;
+        const dir = "/Applications/" + n;
+        let inner = [];
+        try { inner = fs.readdirSync(dir); } catch (e) { continue; }
+        for (const f of inner) {
+            if (/^Adobe Photoshop.*\.app$/.test(f) && exists(path.join(dir, f, "Contents/MacOS"))) {
+                out.push(path.join(dir, f));
+            }
+        }
+    }
+    return out;
 }
 
 // Adobe uygulamaları çalışıyor mu? Hem normal hem Beta sürümleri yakalar
@@ -575,8 +601,10 @@ async function runDoctor(opts = {}) {
         }
     }
 
-    const hasStablePs = fs.existsSync("/Applications") &&
-        fs.readdirSync("/Applications").some((n) => /^Adobe Photoshop/.test(n) && !/\(Beta\)/.test(n));
+    const stablePsApps = stablePhotoshopApps();
+    // (Yalnızca test: normal Photoshop'u olan bir makineyi taklit et.)
+    const fakeStablePs = P.testMode ? (process.env.GOKAI_TEST_STABLE_PS_VERSION || "") : "";
+    const hasStablePs = stablePsApps.length > 0 || !!fakeStablePs;
 
     if (cfgOk) {
         const names = Object.keys(gokaiEntries);
@@ -761,10 +789,54 @@ async function runDoctor(opts = {}) {
         } else if (hasStablePs) {
             let found = false;
             try { found = fs.readdirSync(P.uxpExternal).some((n) => /Photoshop MCP Agent/i.test(n)); } catch (e) { found = false; }
-            if (found) add(G_AD, "ok", "Photoshop eklentisi (UXP) kurulu");
-            else add(G_AD, "warn", "Photoshop eklentisi (UXP) kurulu görünmüyor",
-                "'GokAI Photoshop Plugin' sunucusu eklenti olmadan bağlanamaz. 'GokAI Photoshop' (AppleScript) eklentisiz çalışır.",
-                "Photoshop'u kapatıp kurulumu tekrar çalıştırın: " + FIX_CMD);
+
+            // Kurulu normal Photoshop'ların en yükseği
+            let stableVersion = fakeStablePs;
+            for (const a of stablePsApps) {
+                const v = await appVersion(a);
+                if (parseInt(v, 10) > (parseInt(stableVersion, 10) || 0)) stableVersion = v;
+            }
+            const major = parseInt(stableVersion, 10) || 0;
+
+            // Adobe'nin kurucusu ne diyor: Photoshop'u tanıyor mu, eklenti kayıtlı mı?
+            const upia = P.testMode ? (process.env.GOKAI_TEST_UPIA || "") : UPIA_PATH;
+            const hasUpia = !!upia && isExecutable(upia);
+            let listing = "";
+            if (hasUpia) listing = (await run(upia, ["--list", "all"], 20000)).out;
+            const knowsPhotoshop = listing ? /installed for (Adobe )?Photoshop/i.test(listing) : null;
+            const row = listing.split("\n").find((l) => /Photoshop MCP Agent/i.test(l)) || "";
+            const disabled = /^\s*disabled/i.test(row);
+
+            const record = (install && install.photoshopPlugin) || null;
+            // Uzaktan teşhis için: Adobe'nin kurucusu hangi Photoshop'u görüyor?
+            const seen = (listing.match(/installed for ((?:Adobe )?Photoshop[^\n]*)/gi) || [])
+                .map((l) => l.replace(/^installed for /i, "").trim());
+            const facts = "Kurulu Photoshop: " + (stableVersion || "?") +
+                (hasUpia ? " · Adobe kurucusunun gördüğü: " + (seen.length ? seen.join(", ") : "Photoshop yok") : "") + ".";
+            const fallbackNote = facts + "\n'GokAI Photoshop' (AppleScript) sunucusu eklentisiz çalışır; eksik olan 'GokAI Photoshop Plugin'.";
+
+            if (found && disabled) {
+                add(G_AD, "warn", "Photoshop eklentisi (UXP) kurulu ama devre dışı",
+                    "", "Creative Cloud uygulaması › Stock ve Market Yeri › Eklentiler › Eklentileri yönet bölümünden \"Photoshop MCP Agent\" eklentisini etkinleştirin.");
+            } else if (found) {
+                add(G_AD, "ok", "Photoshop eklentisi (UXP) kurulu");
+            } else if (major && major < MIN_PHOTOSHOP_PLUGIN_MAJOR) {
+                add(G_AD, "warn", "Photoshop eklentisi (UXP) kurulamaz: Photoshop " + stableVersion + " eski",
+                    "Eklenti Photoshop 2025 (v" + MIN_PHOTOSHOP_PLUGIN_MAJOR + ") ve üzerinde yüklenir. " + fallbackNote,
+                    "Photoshop'u Creative Cloud'dan güncelleyin, sonra: " + FIX_CMD);
+            } else if (!hasUpia) {
+                add(G_AD, "warn", "Photoshop eklentisi (UXP) kurulu değil: Adobe eklenti kurucusu yok",
+                    "Creative Cloud uygulaması kurulu ve güncel mi? " + fallbackNote,
+                    "Creative Cloud'u kurun/güncelleyin, sonra: " + FIX_CMD);
+            } else if (knowsPhotoshop === false) {
+                add(G_AD, "warn", "Photoshop eklentisi (UXP) kurulu değil: Creative Cloud bu Photoshop'u tanımıyor",
+                    "Adobe'nin eklenti kurucusu ürün listesinde Photoshop'u göstermiyor; bu yüzden eklentiyi kuramıyor. " + fallbackNote,
+                    "Creative Cloud uygulamasını açıp oturum açın ve Photoshop'u oradan güncelleyin/onarın, sonra: " + FIX_CMD);
+            } else {
+                add(G_AD, "warn", "Photoshop eklentisi (UXP) kurulu değil",
+                    ((record && record.note) ? "Son kurulumda: " + record.note + "\n" : "") + fallbackNote,
+                    "Photoshop'u kapatıp kurulumu tekrar çalıştırın: " + FIX_CMD);
+            }
         } else {
             add(G_AD, "info", "Yalnızca Photoshop Beta var — AppleScript sunucusu kullanılıyor (eklenti gerekmez)");
         }

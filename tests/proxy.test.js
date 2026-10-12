@@ -22,7 +22,7 @@ let passed = 0, failed = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function check(name, cond, extra) {
     if (cond) { passed++; console.log("  PASS  " + name); }
-    else { failed++; console.log("  FAIL  " + name + (extra ? "\n        " + String(extra).slice(0, 400) : "")); }
+    else { failed++; console.log("  FAIL  " + name + (extra ? "\n        " + String(extra).slice(0, 2500) : "")); }
 }
 
 function get(pathname, headers = {}, host = "127.0.0.1") {
@@ -133,7 +133,7 @@ class Mcp {
     console.log("\n== 1. Açılış, yerel bağlama ==");
     startProxy();
     const st = await waitUp();
-    check("proxy açıldı ve /status yanıt veriyor", st && st.version === "2.0.0", proxyLog);
+    check("proxy açıldı ve /status yanıt veriyor", st && /^\d+\.\d+\.\d+$/.test(st.version), proxyLog);
     check("/status yeni alanları içeriyor (stats, install, apps.running)", st && st.stats && "install" in st && typeof st.apps.illustrator.running === "boolean");
     const viaLocalhost = await get("/status", {}, "localhost");
     check("'localhost' adıyla erişiliyor", viaLocalhost.json && viaLocalhost.json.ok);
@@ -223,6 +223,25 @@ class Mcp {
     check("zaman aşımı nedeni açıklıyor ve yeniden denemiyor", r.isError && /yanıt vermedi\. Eklenti bağlı/.test(r.text) && mute.executed.length === 1, r.ms + " ms / çalıştırma=" + mute.executed.length + ": " + r.text);
     mute.close(); ai2.close();
 
+    console.log("\n== 8b. Proxy birkaç saniye yanıt veremezse (meşgul makine) komut yine tamamlanır ==");
+    // Render / büyük dosya sırasında proxy saniyelerce işlemci alamayabilir.
+    // Eski davranış: 1,5 sn yanıt gelmezse "proxy bozuk" deyip hata veriyor
+    // (canlıda: sağlam proxy'yi öldürüp yeniden başlatıyor) du.
+    {
+        const busy = fakePlugin("illustrator");
+        await untilRegistered(busy);
+        const pid = proxy.pid;
+        process.kill(pid, "SIGSTOP");
+        setTimeout(() => { try { process.kill(pid, "SIGCONT"); } catch (e) {} }, 3000);
+        r = await ai.call("get_documents");
+        try { process.kill(pid, "SIGCONT"); } catch (e) {}
+        check("3 sn donan proxy toparlanınca komut tamamlandı (" + r.ms + " ms)", !r.isError && /test\.ai/.test(r.text) && r.ms >= 2500 && r.ms < 15000,
+            r.ms + " ms: " + r.text + "\n" + ai.stderr.slice(-500));
+        check("komut tam bir kez çalıştı (yeniden deneme çift çalıştırmadı)", busy.executed.length === 1, "çalıştırma: " + busy.executed.length);
+        busy.close();
+        await sleep(300);
+    }
+
     console.log("\n== 9. Hatalı paketler proxy'yi düşüremez ==");
     const bad = io(URL, { transports: ["websocket"] });
     await new Promise((res) => bad.on("connect", res));
@@ -262,7 +281,9 @@ class Mcp {
     await sleep(2500);
     check("ikinci kopya portu alamadı ve nedenini yazdı", /başka bir GokAI proxy'si/.test(secondLog), secondLog);
     r = await ai.call("get_documents");
-    check("ilk proxy etkilenmedi", !r.isError && victim.executed.length === 2, r.text);
+    check("ilk proxy etkilenmedi", !r.isError && victim.executed.length === 2,
+        r.ms + " ms: " + r.text + "\n--- eklenti çalıştırma sayısı: " + victim.executed.length + ", bağlı: " + victim.connected +
+        "\n--- MCP stderr:\n" + ai.stderr.slice(-900) + "\n--- proxy:\n" + proxyLog.slice(-700) + "\n--- ikinci proxy:\n" + secondLog);
     second.kill("SIGKILL");
 
     console.log("\n== 12. /restart yalnızca panelden ==");
@@ -274,6 +295,42 @@ class Mcp {
     check("panelden /restart temiz çıkış yaptı (launchd yeniden başlatır)", rOk.status === 200 && code === 0, "code=" + code);
     proxy = null;
     victim.close();
+
+    console.log("\n== 12b. Karşı taraf yanıtı iletip donarsa çağrı asılı kalmaz ==");
+    // adb-mcp'nin kendi gönderme fonksiyonu yanıt geldikten sonra bağlantıyı
+    // BEKLEYEREK kapatıyordu; karşı taraf kapanışı onaylamazsa başarılı komutun
+    // sonucu bile ping süresi kadar gecikiyordu. Burada sahte bir proxy yanıtı
+    // gönderir göndermez kendini dondurur (SIGSTOP): kapanış asla onaylanmaz.
+    {
+        const FPORT = PORT + 7;
+        const fakeSrc = `
+            const http = require("http");
+            const { Server } = require(process.argv[1] + "/socket.io");
+            const srv = http.createServer((req, res) => {
+                res.setHeader("content-type", "application/json");
+                res.end(JSON.stringify({ ok: true, version: "sahte", apps: { illustrator: { connected: true, running: true } } }));
+            });
+            const io = new Server(srv, { transports: ["websocket"] });
+            io.on("connection", (socket) => {
+                socket.on("command_packet", () => {
+                    socket.emit("packet_response", { senderId: socket.id, status: "SUCCESS", response: [{ name: "donmus.ai" }], document: null });
+                    // yanıt çekirdeğe yazılınca kendini dondur
+                    socket.conn.once("drain", () => process.kill(process.pid, "SIGSTOP"));
+                });
+            });
+            srv.listen(${FPORT}, "127.0.0.1", () => console.log("hazir"));
+        `;
+        const fake = spawn(NODE, ["-e", fakeSrc, SB + "/proxy/node_modules"], { stdio: ["ignore", "pipe", "pipe"] });
+        await new Promise((res) => { fake.stdout.on("data", (c) => { if (String(c).includes("hazir")) res(); }); setTimeout(res, 5000); });
+        const frozen = new Mcp("illustrator", { GOKAI_PORT: String(FPORT) });
+        await frozen.init();
+        r = await frozen.call("get_documents");
+        check("yanıt gelir gelmez döndü (" + r.ms + " ms), kapanış beklenmedi", !r.isError && /donmus\.ai/.test(r.text) && r.ms < 5000,
+            r.ms + " ms: " + r.text + "\n" + frozen.stderr.slice(-400));
+        frozen.close();
+        try { process.kill(fake.pid, "SIGCONT"); } catch (e) {}
+        fake.kill("SIGKILL");
+    }
 
     console.log("\n== 13. Proxy kapalıyken başlatıcı onu kendisi açar ==");
     const ps2 = new Mcp("photoshop", { GOKAI_NO_AUTOSTART: "" });
