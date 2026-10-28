@@ -1,7 +1,14 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/gokai-logo-dark.svg">
+    <img src="brand/gokai-logo.svg" alt="GokAI v3" width="340">
+  </picture>
+</p>
+
 # GokAI — Adobe MCP Köprüsü
 
-Ajans içindeki Mac'lere Claude ↔ Adobe (Photoshop / Illustrator) entegrasyonunu
-tek komutla kuran sistem.
+Ajans içindeki Mac'lere Claude ↔ Adobe (Photoshop / Illustrator / Premiere Pro /
+After Effects) entegrasyonunu tek komutla kuran sistem.
 
 ## Makinede ne olması gerekiyor?
 
@@ -51,7 +58,11 @@ curl -fsSL https://raw.githubusercontent.com/gokay12/gokai/main/reset.sh | bash 
 3. **Photoshop** → yeniden başlat → **Eklentiler › Photoshop MCP Agent** →
    **Connect** → **Connect on Launch** ✅
    *(Beta kullanan makinelerde bu adım yok — aşağıya bak.)*
-4. Doğrula: **GokAI.app** (`~/Applications`) → *"Tüm sistemler hazır"* yazmalı,
+4. **Premiere Pro** (kuruluysa) → yeniden başlat → **Pencere › Uzantılar › MCP Bridge (CEP)**.
+   Panel açılınca köprüyü kendisi başlatır; paneli açık/yerleşik bırak.
+5. **After Effects** (kuruluysa) → yeniden başlat. Eklenti kendiliğinden başlar
+   (görünmezse Mac'i bir kez yeniden başlat — macOS ayarı önbellekte kalabiliyor).
+6. Doğrula: **GokAI.app** (`~/Applications`) → *"Tüm sistemler hazır"* yazmalı,
    **Tanı** bölümünde sorun görünmemeli.
 
 ## Bir makinede sorun mu var?
@@ -162,11 +173,13 @@ Bağlantının kendisi için eklenenler:
 | `doctor.sh` | Tek satırlık tanı (yalnızca okur) |
 | `gokai-doctor.js` | Tanının kendisi; doctor.sh, install.sh ve proxy (`/doctor`) aynı kodu kullanır |
 | `gokai-proxy.js` | adb-mcp proxy'sinin GokAI sürümü: aynı protokol + sağlamlaştırma + `/status`, `/doctor` + panel |
-| `public/index.html` | Durum paneli (http://localhost:3001) |
+| `public/` | Durum paneli (http://localhost:3001) ve sekme ikonu |
+| `brand/` | Logo ve uygulama ikonunun kaynakları (SVG); `gokai.icns` ve `icon_1024.png` `brand/gokai-icon.svg` dosyasından üretildi |
 | `mcp/gokai_mcp.py` | adb-mcp sunucularının başlatıcısı (proxy'yi ayağa kaldırır, hata iletilerini düzeltir) |
 | `mcp/requirements.lock` | Kilitli Python ortamı (sürüm + hash) |
 | `cep/` | Illustrator eklentisinin GokAI sürümü (adb-mcp'nin `index.html` + `main.js` dosyalarının yerine geçer) |
 | `photoshop-mcp/` | Sabit sürümlü Photoshop MCP sunucusu (`package.json` + `package-lock.json`) |
+| `video-mcp/` | Sabit sürümlü Premiere Pro ve After Effects MCP sunucuları (`package.json` + `package-lock.json`) |
 | `tests/` | Test takımları (`bash tests/run.sh`) — kurulum, proxy, başlatıcı, eklenti |
 
 Makinedeki yerleşim (`~/Library/Application Support/GokAI/`):
@@ -180,6 +193,8 @@ Makinedeki yerleşim (`~/Library/Application Support/GokAI/`):
 | GokAI Photoshop | `node …/photoshop-mcp/…/dist/index.js` | Eklenti gerektirmez, AppleScript ile çalışır |
 | GokAI Photoshop Plugin | `venv/bin/python -I mcp/gokai_mcp.py photoshop` | UXP eklentisi + proxy gerekir — **Beta makinelerde eklenmez** |
 | GokAI Illustrator | `venv/bin/python -I mcp/gokai_mcp.py illustrator` | CEP eklentisi + proxy gerekir |
+| GokAI Premiere Pro | `node …/video-mcp/…/adobe-premiere-pro-mcp/dist/index.js` | Yalnızca Premiere kuruluysa. "MCP Bridge (CEP)" paneli, `/tmp/premiere-mcp-bridge` klasörü üzerinden |
+| GokAI After Effects | `node …/video-mcp/…/@engine-room/after-effects-mcp/bin/server.js` | Yalnızca After Effects kuruluysa. "AE MCP Bridge" paneli kendi yerel bağlantısını kurar (GokAI proxy'si kullanılmaz) |
 
 Hiçbiri `uv run` ya da `npx` kullanmaz. `-I`, Python'u kullanıcının
 `PYTHONPATH` / site-packages ayarlarından yalıtır.
@@ -191,15 +206,21 @@ Her şey bilinçli olarak sabit; "en yenisi" hiçbir yerde kullanılmıyor. Yük
 - **Python paketleri** — `mcp/requirements.in` / `mcp/constraints.txt` düzenle,
   kilidi yeniden üret (komut `requirements.in` dosyasının başında). `mcp` 1.5.0'da
   kalıyorsa `pydantic<2.14` sınırı kalmalı.
-- **photoshop-mcp** — `photoshop-mcp/package.json` içindeki sürümü değiştir, o
-  klasörde `npm install --package-lock-only` çalıştır.
+- **photoshop-mcp / Premiere Pro / After Effects** — `photoshop-mcp/` ya da
+  `video-mcp/` içindeki `package.json` sürümünü değiştir, o klasörde
+  `npm install --package-lock-only` çalıştır. After Effects paneli kurulurken
+  içine `ws` modülü kopyalanır (paketin kendi `setup_panel` aracı gibi); yeni
+  sürümde panel düzeni değiştiyse install.sh'taki After Effects adımına bak.
 - **adb-mcp** — `install.sh` içindeki `ADB_MCP_COMMIT`. Upstream'in
   `cep/com.mikechambers.ai/main.js` ya da `index.html` dosyası değiştiyse kurulum
   bilerek durur: `cep/` altındaki GokAI sürümlerini yeni upstream ile karşılaştır,
   sonra `CEP_UPSTREAM_*_SHA256` değerlerini güncelle.
 - **Node / uv** — `install.sh` başındaki sürüm ve `sha256` değerleri (iki mimari).
 - **GokAI sürümü** — `install.sh` (`GOKAI_VERSION`), `gokai-proxy.js` (`VERSION`),
-  `gokai-doctor.js` (`DOCTOR_VERSION`) ve `package.json` aynı olmalı.
+  `gokai-doctor.js` (`DOCTOR_VERSION`) ve `package.json` aynı olmalı. Logoda "GokAI"
+  sabittir, yanındaki rozet ana sürümü gösterir: paneldeki rozet sürümü kendisi okur;
+  ana sürüm değişince (v3 → v4) yalnızca `brand/gokai-logo*.svg` içindeki `v3`
+  yazısını güncelle.
 
 **Yayınlamadan önce testleri çalıştır.** Sahte bir ev klasörüne test modunda kurup
 kurulum senaryolarını (internet kesintisi, yarıda kesilme, bozuk Claude ayarı…),
@@ -271,7 +292,7 @@ Yalnızca kurulumu elle denemek için:
 
 ## Teşekkürler & Lisanslar
 
-GokAI, iki açık kaynak projenin üzerine kurulmuş bir kurulum/panel katmanıdır —
+GokAI, açık kaynak projelerin üzerine kurulmuş bir kurulum/panel katmanıdır —
 asıl işi yapan onlar:
 
 - **[adb-mcp](https://github.com/mikechambers/adb-mcp)** — Mike Chambers (MIT).
@@ -279,6 +300,12 @@ asıl işi yapan onlar:
   `gokai-proxy.js` içindeki proxy protokolü bu projenin `adb-proxy-socket`
   bileşeninden, `cep/main.js` ise `cep/com.mikechambers.ai/main.js` dosyasından
   türetilmiştir; orijinal lisans bildirimleri korunmaktadır.
+- **[adobe_premiere_pro_mcp](https://github.com/hetpatel-11/adobe_premiere_pro_mcp)** —
+  hetpatel-11 (MIT). Premiere Pro MCP sunucusu ve "MCP Bridge (CEP)" paneli
+  (`adobe-premiere-pro-mcp` npm paketi olarak kurulur).
+- **[after-effects-mcp](https://github.com/Engine-Room-Games/after-effects-mcp)** —
+  Engine Room (MIT). After Effects MCP sunucusu ve "AE MCP Bridge" paneli
+  (`@engine-room/after-effects-mcp` npm paketi olarak kurulur).
 - **[photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp)** — Ali Sait Teke (MIT).
   Eklentisiz, AppleScript tabanlı Photoshop MCP sunucusu
   (`@alisaitteke/photoshop-mcp` npm paketi olarak kurulur, kodu bu repoda yer almaz).

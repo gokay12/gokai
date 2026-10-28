@@ -32,7 +32,7 @@
 # yalnızca ana kabukta ve yalnızca bir kez çalışır.
 set -euo pipefail
 
-GOKAI_VERSION="2.0.1"
+GOKAI_VERSION="3.0.0"
 
 # ------------------------------------------------- sabitlenmiş sürümler ---
 # Buradaki her şey bilinçli olarak sabit. Yükseltmek için README'deki
@@ -96,7 +96,7 @@ SERVICE="com.gokai.proxy"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 
 bold() { printf "\033[1m%s\033[0m\n" "$1"; }
-step() { CURRENT_STEP="$1"; printf "\n\033[1;35m[GokAI]\033[0m \033[1m%s\033[0m\n" "$1"; echo "=== $(date '+%H:%M:%S') $1" >>"$ILOG"; }
+step() { CURRENT_STEP="$1"; printf "\n\033[1;38;5;208m[GokAI]\033[0m \033[1m%s\033[0m\n" "$1"; echo "=== $(date '+%H:%M:%S') $1" >>"$ILOG"; }
 ok()   { printf "  \033[32m✓\033[0m %s\n" "$1"; }
 warn() { printf "  \033[33m!\033[0m %s\n" "$1"; }
 skip() { printf "  \033[90m·\033[0m %s\n" "$1"; }
@@ -260,13 +260,15 @@ if [ -f "$ILOG" ] && [ "$(wc -c <"$ILOG")" -gt 524288 ]; then
 fi
 { echo ""; echo "##### GokAI $GOKAI_VERSION kurulumu — $(date '+%Y-%m-%d %H:%M:%S') #####"; } >>"$ILOG"
 
+# v3 renkleri: tepede mor, ufukta turuncu (256 renk; Terminal.app destekler)
+sky() { printf "\033[1;38;5;%sm%s\033[0m\n" "$1" "$2"; }
 bold ""
-bold "  ██████╗  ██████╗ ██╗  ██╗ █████╗ ██╗"
-bold " ██╔════╝ ██╔═══██╗██║ ██╔╝██╔══██╗██║"
-bold " ██║  ███╗██║   ██║█████╔╝ ███████║██║"
-bold " ██║   ██║██║   ██║██╔═██╗ ██╔══██║██║"
-bold " ╚██████╔╝╚██████╔╝██║  ██╗██║  ██║██║"
-bold "  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝"
+sky 99  "  ██████╗  ██████╗ ██╗  ██╗ █████╗ ██╗"
+sky 135 " ██╔════╝ ██╔═══██╗██║ ██╔╝██╔══██╗██║"
+sky 170 " ██║  ███╗██║   ██║█████╔╝ ███████║██║"
+sky 205 " ██║   ██║██║   ██║██╔═██╗ ██╔══██║██║"
+sky 209 " ╚██████╔╝╚██████╔╝██║  ██╗██║  ██║██║"
+sky 208 "  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝"
 bold "  Adobe MCP Köprüsü — Kurulum v$GOKAI_VERSION"
 
 # ------------------------------------------------------------- ön kontroller ---
@@ -369,7 +371,8 @@ else
 fi
 for f in gokai-proxy.js gokai-doctor.js package.json package-lock.json public/index.html \
          mcp/gokai_mcp.py mcp/requirements.lock cep/index.html cep/main.js \
-         photoshop-mcp/package.json photoshop-mcp/package-lock.json; do
+         photoshop-mcp/package.json photoshop-mcp/package-lock.json \
+         video-mcp/package.json video-mcp/package-lock.json; do
   [ -f "$SRC/$f" ] || fail "GokAI paketi eksik: $f bulunamadı" \
     "İndirme yarım kalmış ya da depo güncelleniyor olabilir. Birkaç dakika sonra tekrar deneyin."
 done
@@ -394,11 +397,11 @@ UV_DIR="$GOKAI_DIR/uv"
 PY_DIR="$GOKAI_DIR/python"
 VENV="$GOKAI_DIR/venv"
 ADB_DIR="$GOKAI_DIR/adb-mcp"
-PS_DIR="$GOKAI_DIR/photoshop-mcp"
 PS_ENTRY_REL="node_modules/@alisaitteke/photoshop-mcp/dist/index.js"
+PR_ENTRY_REL="node_modules/adobe-premiere-pro-mcp/dist/index.js"
+AE_ENTRY_REL="node_modules/@engine-room/after-effects-mcp/bin/server.js"
 PROXY_LOCK_SHA="$(sha256_of "$SRC/package-lock.json")"
 PY_LOCK_SHA="$(sha256_of "$SRC/mcp/requirements.lock")"
-PS_LOCK_SHA="$(sha256_of "$SRC/photoshop-mcp/package-lock.json")"
 
 run_npm() { ( cd "$1" && shift && PATH="$ROOT/node/bin:/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/node/bin/npm" "$@" </dev/null >>"$ILOG" 2>&1 ); }
 
@@ -408,6 +411,26 @@ run_uv() {
       UV_NO_CONFIG=1 UV_NO_PROGRESS=1 UV_PYTHON_PREFERENCE=only-managed \
       UV_PYTHON_INSTALL_DIR="$PY_DIR" UV_CACHE_DIR="$CACHE_DIR/uv" UV_LINK_MODE=copy \
       "$ROOT/uv/uv" "$@" </dev/null >>"$ILOG" 2>&1
+}
+
+# Kilitli bir npm klasörünü (package-lock.json ile birebir) hazırlar; kilit
+# dosyası değişmemiş ve giriş dosyası yerindeyse mevcut kurulumu kullanır.
+stage_npm() { # klasör  giriş-dosyası  ad
+  local dir="$1" entry="$2" label="$3" sha
+  sha="$(sha256_of "$SRC/$dir/package-lock.json")"
+  if [ "$REUSE" -eq 1 ] && [ -f "$GOKAI_DIR/$dir/.gokai-lock-sha256" ] \
+     && [ "$(cat "$GOKAI_DIR/$dir/.gokai-lock-sha256")" = "$sha" ] && [ -f "$GOKAI_DIR/$dir/$entry" ]; then
+    reuse "$dir" "$GOKAI_DIR/$dir"
+    ok "$label: zaten kurulu (kilit dosyası değişmemiş)"
+    return 0
+  fi
+  mkdir -p "$ROOT/$dir"
+  cp "$SRC/$dir/package.json" "$SRC/$dir/package-lock.json" "$ROOT/$dir/"
+  skip "$label indiriliyor; bağlantıya göre birkaç dakika sürebilir, lütfen bekleyin"
+  spin run_npm "$ROOT/$dir" ci --omit=dev --no-audit --no-fund --loglevel=error || net_fail "$label (npm)"
+  [ -f "$ROOT/$dir/$entry" ] || fail "$label eksik kuruldu"
+  echo "$sha" >"$ROOT/$dir/.gokai-lock-sha256"
+  ok "$label kuruldu (kilitli sürümler)"
 }
 
 reuse() { # bileşen-adı  mevcut-yol  → $ROOT altına bağla
@@ -557,22 +580,12 @@ stage_all() {
   fi
   ok "Illustrator eklentisi hazırlandı (Socket.IO yerel, internet gerekmez)"
 
-  # ---------------------------------------------------- 7. Photoshop MCP ---
-  step "7/10 Photoshop MCP sunucusu kuruluyor (photoshop-mcp $PS_MCP_VERSION, sabit)"
-  if [ "$REUSE" -eq 1 ] && [ -f "$PS_DIR/.gokai-lock-sha256" ] \
-     && [ "$(cat "$PS_DIR/.gokai-lock-sha256")" = "$PS_LOCK_SHA" ] && [ -f "$PS_DIR/$PS_ENTRY_REL" ]; then
-    reuse photoshop-mcp "$PS_DIR"
-    ok "Zaten kurulu (kilit dosyası değişmemiş)"
-  else
-    mkdir -p "$ROOT/photoshop-mcp"
-    cp "$SRC/photoshop-mcp/package.json" "$SRC/photoshop-mcp/package-lock.json" "$ROOT/photoshop-mcp/"
-    skip "~350 MB indiriliyor; bağlantıya göre birkaç dakika sürebilir, lütfen bekleyin"
-    # Eskiden bu sunucu her Claude açılışında "npx -y" ile internetten kuruluyordu.
-    spin run_npm "$ROOT/photoshop-mcp" ci --omit=dev --no-audit --no-fund --loglevel=error || net_fail "Photoshop MCP sunucusu (npm)"
-    [ -f "$ROOT/photoshop-mcp/$PS_ENTRY_REL" ] || fail "Photoshop MCP sunucusu eksik kuruldu"
-    echo "$PS_LOCK_SHA" >"$ROOT/photoshop-mcp/.gokai-lock-sha256"
-    ok "photoshop-mcp $PS_MCP_VERSION kuruldu (kilitli sürümler)"
-  fi
+  # --------------------------------------------- 7. Node tabanlı MCP sunucuları ---
+  # Eskiden bu sunucular her Claude açılışında "npx -y" ile internetten kuruluyordu.
+  step "7/10 MCP sunucuları kuruluyor (Photoshop, Premiere Pro, After Effects — sabit sürümler)"
+  stage_npm photoshop-mcp "$PS_ENTRY_REL" "photoshop-mcp $PS_MCP_VERSION"
+  stage_npm video-mcp "$PR_ENTRY_REL" "Premiere Pro + After Effects MCP"
+  [ -f "$ROOT/video-mcp/$AE_ENTRY_REL" ] || fail "After Effects MCP sunucusu eksik kuruldu"
 }
 
 # Normal (Beta olmayan) Photoshop var mı? Yoksa UXP eklentisi kurulamaz, dolayısıyla
@@ -595,6 +608,18 @@ for d in /Applications/Adobe\ Photoshop*; do
     if [ -z "$PS_STABLE_VERSION" ] || [ "${v%%.*}" -gt "${PS_STABLE_VERSION%%.*}" ]; then PS_STABLE_VERSION="$v"; fi
   done
 done
+# Premiere Pro / After Effects kurulu mu? Kurulu değilse sunucusu Claude'a
+# eklenmez: her sunucunun araç listesi her sohbette Claude'un bağlamına girer.
+has_app() { # "/Applications altındaki klasör adının başı"
+  local a
+  for a in "/Applications/$1"*/*.app; do
+    if [ -d "$a/Contents/MacOS" ]; then return 0; fi
+  done
+  return 1
+}
+HAS_PREMIERE=0; if has_app "Adobe Premiere Pro"; then HAS_PREMIERE=1; fi
+HAS_AE=0; if has_app "Adobe After Effects"; then HAS_AE=1; fi
+
 # (Yalnızca test: normal Photoshop'u olan bir makineyi taklit et.)
 if [ "$TEST_MODE" = "1" ] && [ -n "${GOKAI_TEST_STABLE_PS_VERSION:-}" ]; then
   HAS_STABLE_PS=1
@@ -629,6 +654,14 @@ const servers = [
 if (process.env.HAS_STABLE_PS === "1") {
   servers.push(["GokAI Photoshop Plugin", { command: py, args: ["-I", launcher, "photoshop"], env: pyEnv }, 50]);
 }
+const video = path.join(root, "video-mcp", "node_modules");
+servers.push(
+  ["GokAI Premiere Pro", { command: path.join(root, "node", "bin", "node"),
+    args: [path.join(video, "adobe-premiere-pro-mcp", "dist", "index.js")],
+    env: { PREMIERE_TEMP_DIR: "/tmp/premiere-mcp-bridge" } }, 3],
+  ["GokAI After Effects", { command: path.join(root, "node", "bin", "node"),
+    args: [path.join(video, "@engine-room", "after-effects-mcp", "bin", "server.js")] }, 50],
+);
 (async () => {
   let bad = 0;
   for (const [name, entry, minTools] of servers) {
@@ -673,7 +706,7 @@ fi
 # ------------------------------------------------------ 9. Yerine koy ---
 # Yerine koymaya başlamadan önce hazırlanan her parçanın gerçekten var olduğunu
 # doğrula: eksik bir parçayla başlamak çalışan kurulumu yarım bırakır.
-for part in node uv venv adb-mcp photoshop-mcp proxy/node_modules proxy/gokai-proxy.js \
+for part in node uv venv adb-mcp photoshop-mcp video-mcp proxy/node_modules proxy/gokai-proxy.js \
             proxy/gokai-doctor.js proxy/public/index.html mcp/gokai_mcp.py; do
   [ -e "$ROOT/$part" ] || fail "İç hata: hazırlanan kurulum eksik ($part)" \
     "Hiçbir şey değiştirilmedi. Bu iletiyi kurulumu yapan kişiye iletin."
@@ -701,7 +734,7 @@ for pid in $( { lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true; } | sort -
   esac
 done
 
-for part in node uv venv adb-mcp photoshop-mcp; do
+for part in node uv venv adb-mcp photoshop-mcp video-mcp; do
   # Sembolik bağ = mevcut kurulum yeniden kullanıldı, dokunma.
   if [ ! -L "$ROOT/$part" ]; then swap_in "$ROOT/$part" "$GOKAI_DIR/$part"; fi
 done
@@ -796,6 +829,7 @@ fi
 
 MERGE=0
 GOKAI_DIR="$GOKAI_DIR" CLAUDE_CONFIG="$CLAUDE_CONFIG" HAS_STABLE_PS="$HAS_STABLE_PS" \
+HAS_PREMIERE="$HAS_PREMIERE" HAS_AE="$HAS_AE" \
 "$NODE" - <<'MERGE_EOF' || MERGE=$?
 const fs = require("fs");
 const path = require("path");
@@ -826,6 +860,23 @@ const entries = {
 // bu sunucu asla bağlanamaz, o yüzden hiç eklenmiyor.
 if (process.env.HAS_STABLE_PS === "1") {
   entries["GokAI Photoshop Plugin"] = adb("photoshop");
+}
+
+// Premiere Pro / After Effects: yalnızca uygulama kuruluysa. PATH verilmiyor:
+// Premiere sunucusu bazı araçlarda ffmpeg'i Claude'un PATH'inde arıyor.
+const video = path.join(gokaiDir, "video-mcp", "node_modules");
+if (process.env.HAS_PREMIERE === "1") {
+  entries["GokAI Premiere Pro"] = {
+    command: path.join(nodeBin, "node"),
+    args: [path.join(video, "adobe-premiere-pro-mcp", "dist", "index.js")],
+    env: { PREMIERE_TEMP_DIR: "/tmp/premiere-mcp-bridge" },
+  };
+}
+if (process.env.HAS_AE === "1") {
+  entries["GokAI After Effects"] = {
+    command: path.join(nodeBin, "node"),
+    args: [path.join(video, "@engine-room", "after-effects-mcp", "bin", "server.js")],
+  };
 }
 
 let cfg = {};
@@ -902,16 +953,41 @@ fi
 # UXP'nin aksine bu KALICIDIR — Illustrator her açıldığında tekrar yüklemeye gerek yok.
 CEP_DIR="$HOME/Library/Application Support/Adobe/CEP/extensions"
 CEP_SRC="$GOKAI_DIR/adb-mcp/cep/com.mikechambers.ai"
-CEP_LINK="$CEP_DIR/com.mikechambers.ai"
 mkdir -p "$CEP_DIR"
-# Elle kopyalanmış eski bir klasör varsa `ln -sfn` bağlantıyı onun İÇİNE kurar.
-if [ -e "$CEP_LINK" ] && [ ! -L "$CEP_LINK" ]; then
-  mkdir -p "$GOKAI_DIR/.replaced"
-  mv "$CEP_LINK" "$GOKAI_DIR/.replaced/com.mikechambers.ai-$(date +%Y%m%d%H%M%S)"
-  warn "Elle kurulmuş eski Illustrator eklentisi kenara alındı"
-fi
-ln -sfn "$CEP_SRC" "$CEP_LINK"
+# Eklenti klasörünü GokAI'deki kaynağa bağlar. Elle kopyalanmış eski bir klasör
+# varsa `ln -sfn` bağlantıyı onun İÇİNE kurar; önce kenara alınır.
+link_cep() { # kaynak  klasör-adı
+  local link="$CEP_DIR/$2"
+  if [ -e "$link" ] && [ ! -L "$link" ]; then
+    mkdir -p "$GOKAI_DIR/.replaced"
+    mv "$link" "$GOKAI_DIR/.replaced/$2-$(date +%Y%m%d%H%M%S)"
+    warn "Elle kurulmuş eski $2 eklentisi kenara alındı"
+  fi
+  ln -sfn "$1" "$link"
+}
+link_cep "$CEP_SRC" com.mikechambers.ai
 ok "Illustrator eklentisi bağlandı: com.mikechambers.ai"
+
+VIDEO_MODULES="$GOKAI_DIR/video-mcp/node_modules"
+if [ "$HAS_PREMIERE" -eq 1 ]; then
+  # "MCP Bridge (CEP)": panel açılınca köprüyü kendisi başlatır (/tmp/premiere-mcp-bridge).
+  link_cep "$VIDEO_MODULES/adobe-premiere-pro-mcp/cep-plugin" MCPBridgeCEP
+  ok "Premiere Pro eklentisi bağlandı: MCPBridgeCEP"
+fi
+if [ "$HAS_AE" -eq 1 ]; then
+  # "AE MCP Bridge": After Effects açılınca kendiliğinden başlar. Bağ değil kopya:
+  # panelin Node'u `ws` modülünü kendi klasöründe arıyor (paketin kendi
+  # setup_panel aracı da böyle kuruyor).
+  AE_PANEL="$CEP_DIR/games.engine-room.ae-mcp"
+  rm -rf "$AE_PANEL"
+  cp -R "$VIDEO_MODULES/@engine-room/after-effects-mcp/panel" "$AE_PANEL"
+  mkdir -p "$AE_PANEL/node_modules"
+  WS_SRC="$VIDEO_MODULES/@engine-room/after-effects-mcp/node_modules/ws"
+  [ -d "$WS_SRC" ] || WS_SRC="$VIDEO_MODULES/ws"
+  cp -R "$WS_SRC" "$AE_PANEL/node_modules/ws"
+  [ -f "$AE_PANEL/node_modules/ws/package.json" ] || fail "After Effects eklentisi eksik kuruldu (ws modülü)"
+  ok "After Effects eklentisi kuruldu: games.engine-room.ae-mcp"
+fi
 if [ "$TEST_MODE" != "1" ]; then
   # İmzasız CEP eklentilerinin yüklenmesi için gerekli (CSXS sürümü CC sürümüne göre değişir)
   for v in 9 10 11 12 13 14 15 16; do defaults write "com.adobe.CSXS.$v" PlayerDebugMode 1 2>/dev/null || true; done
@@ -1157,6 +1233,12 @@ elif [ "$HAS_STABLE_PS" -eq 1 ]; then
   echo "  3. Photoshop: önce yukarıdaki eklenti eksiğini giderin"
 else
   echo "  3. Photoshop: yapacak bir şey yok — Beta'da eklentisiz çalışır"
+fi
+if [ "$HAS_PREMIERE" -eq 1 ]; then
+  echo "  •  Premiere Pro: yeniden başlat → Pencere › Uzantılar › MCP Bridge (CEP) (bir kez; köprü kendiliğinden başlar)"
+fi
+if [ "$HAS_AE" -eq 1 ]; then
+  echo "  •  After Effects: yeniden başlat — eklenti kendiliğinden başlar (görünmezse Mac'i bir kez yeniden başlatın)"
 fi
 echo "  4. Durum paneli: GokAI.app  →  http://localhost:$PORT"
 echo ""

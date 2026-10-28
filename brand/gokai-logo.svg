@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -5 492.68 109" role="img" aria-label="GokAI v3">
+<!-- GokAI v3 logosu (açık zemin). "GokAI" sabittir; ana sürüm değişince yalnızca rozetteki "v3" yazısı güncellenir. -->
+<defs><linearGradient id="m" x1="0" y1="10" x2="0" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB662"/><stop offset="1" stop-color="#FF6A1A"/></linearGradient></defs>
+  <path transform="translate(-12.875 -14.375) scale(1.288)" fill="url(#m)" d="M69.39 15.02A40 40 0 1 0 89.99 50.7A32.78 32.78 0 1 1 69.39 15.02Z"/>
+  <path transform="translate(-12.875 -14.375) scale(1.288)" fill="url(#m)" d="M62 38.7H88.37A40 40 0 0 1 89.99 50.7H62A6 6 0 0 1 62 38.7Z"/>
+  <path fill-rule="evenodd" fill="#1B0B3A" d="M111 64a37.5 37.5 0 1 0 75 0a37.5 37.5 0 1 0 -75 0ZM127 64a21.5 21.5 0 1 1 43 0a21.5 21.5 0 1 1 -43 0Z"/>
+  <path fill="#1B0B3A" d="M199 0H215V100H199Z"/>
+  <path fill="#1B0B3A" d="M237.25 28H256.75L207 99.51V71.49Z"/>
+  <path fill="#1B0B3A" d="M240.32 100H257.68L238.08 53.3H220.72Z"/>
+  <path fill-rule="evenodd" fill="#1B0B3A" d="M266.68 100L312.68 -3L358.68 100ZM284.2 100L312.68 36.24L341.15 100Z"/>
+  <path fill="#1B0B3A" d="M281.86 66H343.49V80H275.61Z"/>
+  <path fill="#1B0B3A" d="M368.68 0H384.68V100H368.68Z"/>
+  <rect x="408.68" y="23" width="80" height="54" rx="27" fill="#6A35E8"/>
+  <text x="448.68" y="62" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', -apple-system, 'Segoe UI', sans-serif" font-weight="800" font-size="37" fill="#fff">v3</text>
+</svg>

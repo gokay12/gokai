@@ -54,6 +54,15 @@ install; RC=$?
 P2=$(proxy_pid)
 check "portta eski proxy VARKEN: başarılı, proxy yenisiyle değişti (pid $P1 → $P2)" "[ $RC -eq 0 ] && intact && [ -n \"$P2\" ] && [ \"$P1\" != \"$P2\" ]"
 check "yapılandırma değişmediği için yeni yedek alınmadı" "[ $(backups) -eq $B0 ]"
+# Kurulumun denediği sunucular kapatılmış olmalı (bazıları girişi kapanınca kendiliğinden kapanmıyor)
+check "denenen MCP sunucuları geride süreç bırakmadı" "[ \$(ps -Ao ppid=,command= | awk '\$1==1' | grep -F '$G/' | grep -v gokai-proxy.js | grep -c -E 'node|python' || true) -eq 0 ]"
+CEPX="$H/Library/Application Support/Adobe/CEP/extensions"
+if ls -d /Applications/Adobe\ Premiere\ Pro*/*.app >/dev/null 2>&1; then
+  check "Premiere Pro: sunucu eklendi, eklenti bağlandı" "grep -q '\"GokAI Premiere Pro\"' '$CFG' && [ -f '$CEPX/MCPBridgeCEP/CSXS/manifest.xml' ] && grep -q 'GokAI Premiere Pro: açıldı' '$LOG'"
+fi
+if ls -d /Applications/Adobe\ After\ Effects*/*.app >/dev/null 2>&1; then
+  check "After Effects: sunucu eklendi, eklenti (ws dahil) kuruldu" "grep -q '\"GokAI After Effects\"' '$CFG' && [ -f '$CEPX/games.engine-room.ae-mcp/node_modules/ws/package.json' ] && grep -q 'GokAI After Effects: açıldı' '$LOG'"
+fi
 check "doktor: sorun yok" "doctor_ok"
 
 echo ""; echo "== S2. İndirme sırasında internet kesilirse =="

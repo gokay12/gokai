@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<!-- GokAI uygulama ikonu: mor gökyüzü, ufukta gün batımı, turuncu ay-G. 1024 tuval, macOS ızgarası (824 kare). -->
+<defs>
+  <linearGradient id="sky" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7C4DFF"/><stop offset="1" stop-color="#3A16A6"/></linearGradient>
+  <radialGradient id="dusk" cx="512" cy="924" r="430" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 924) scale(1.35 .8) translate(-512 -924)"><stop offset="0" stop-color="#FF8A3D" stop-opacity=".75"/><stop offset=".5" stop-color="#E0559A" stop-opacity=".3"/><stop offset="1" stop-color="#E0559A" stop-opacity="0"/></radialGradient>
+  <linearGradient id="moon" x1="0" y1="10" x2="0" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB662"/><stop offset="1" stop-color="#FF6A1A"/></linearGradient>
+  <clipPath id="clip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <filter id="sh" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".3"/></filter>
+  <filter id="ms" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#1A0650" flood-opacity=".45"/></filter>
+</defs>
+<g filter="url(#sh)"><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sky)"/></g>
+<g clip-path="url(#clip)"><rect width="1024" height="1024" fill="url(#dusk)"/></g>
+<g transform="translate(232 222) scale(5.6)" filter="url(#ms)"><path fill="url(#moon)" d="M69.392 15.015A40 40 0 1 0 89.994 50.698A32.784 32.784 0 1 1 69.392 15.015Z"/><path fill="url(#moon)" d="M62 38.698H88.37A40 40 0 0 1 89.994 50.698H62A6 6 0 0 1 62 38.698Z"/></g>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="2.5"/>
+</svg>

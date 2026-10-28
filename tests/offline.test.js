@@ -22,6 +22,8 @@ const wrap = (cmd, args, env) => ({ command: "/usr/bin/sandbox-exec", args: ["-p
     "GokAI Illustrator": wrap(G + "/venv/bin/python", ["-I", G + "/mcp/gokai_mcp.py", "illustrator"], { GOKAI_NO_AUTOSTART: "1" }),
     "GokAI Photoshop Plugin (ps-mcp.py)": wrap(G + "/venv/bin/python", ["-I", G + "/mcp/gokai_mcp.py", "photoshop"], { GOKAI_NO_AUTOSTART: "1" }),
     "GokAI Photoshop": wrap(G + "/node/bin/node", [G + "/photoshop-mcp/node_modules/@alisaitteke/photoshop-mcp/dist/index.js"], { LOG_LEVEL: "1", PSMCP_UPDATE_CHECK: "0", ANALYTICS_DISABLED: "1", PHOTOSHOP_MCP_HOME: scratch }),
+    "GokAI Premiere Pro": wrap(G + "/node/bin/node", [G + "/video-mcp/node_modules/adobe-premiere-pro-mcp/dist/index.js"], { PREMIERE_TEMP_DIR: "/tmp/premiere-mcp-bridge" }),
+    "GokAI After Effects": wrap(G + "/node/bin/node", [G + "/video-mcp/node_modules/@engine-room/after-effects-mcp/bin/server.js"], {}),
   };
   let bad = 0;
   for (const [name, entry] of Object.entries(servers)) {

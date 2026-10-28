@@ -24,7 +24,7 @@ const path = require("path");
 const http = require("http");
 const { spawn, execFile } = require("child_process");
 
-const DOCTOR_VERSION = "2.0.1";
+const DOCTOR_VERSION = "3.0.0";
 const SERVICE_LABEL = "com.gokai.proxy";
 // Kurulum betiği yeni sürümü önce hazırlayıp dener, sonra yerine koyar; bu yüzden
 // onarım için de güvenle çalıştırılabilir (reset.sh'ın aksine önce silmez).
@@ -53,6 +53,7 @@ function resolvePaths(opts = {}) {
             path.join(home, "Library/Logs/Claude"),
         plist: path.join(home, "Library/LaunchAgents", SERVICE_LABEL + ".plist"),
         cepExt: path.join(home, "Library/Application Support/Adobe/CEP/extensions/com.mikechambers.ai"),
+        cepDir: path.join(home, "Library/Application Support/Adobe/CEP/extensions"),
         uxpExternal: path.join(home, "Library/Application Support/Adobe/UXP/Plugins/External"),
         port: opts.port || parseInt(process.env.GOKAI_PORT || "3001", 10),
         testMode: process.env.GOKAI_TEST_MODE === "1",
@@ -228,6 +229,16 @@ function matchSignature(text) {
 // aynı env; stdio üzerinden initialize → tools/list. Araç listesi geldiyse
 // sunucu Claude'da da açılır.
 
+// Denenen sunucular: bu süreç biterken hâlâ çalışan varsa öldürülür. Bazı
+// sunucular (Premiere, After Effects) girişleri kapanınca kendiliğinden
+// kapanmıyor; öldürülmezlerse her tanıda bir tane öksüz süreç birikir.
+const liveChildren = new Set();
+process.on("exit", () => {
+    for (const pid of liveChildren) {
+        try { process.kill(pid, "SIGKILL"); } catch (e) { /* çıkmış */ }
+    }
+});
+
 function mcpHandshake(entry, opts = {}) {
     const timeoutMs = opts.timeoutMs || 30000;
     const started = Date.now();
@@ -251,12 +262,13 @@ function mcpHandshake(entry, opts = {}) {
             result.error = error || null;
             result.ms = Date.now() - started;
             result.stderrTail = tail(stderr, 12);
-            // Nazikçe kapat: stdin'i kapatınca stdio sunucuları kendiliğinden çıkar.
+            // Kapat: el sıkışma bitti, sunucunun yapacağı başka bir şey yok.
+            // (stdin'in kapanmasını beklemek yetmiyor: her sunucu buna çıkmıyor.)
             if (child) {
                 try { child.stdin.end(); } catch (e) { /* zaten kapalı */ }
+                try { child.kill("SIGTERM"); } catch (e) { /* çıkmış */ }
                 const pid = child.pid;
-                setTimeout(() => { try { process.kill(pid, "SIGTERM"); } catch (e) { /* çıkmış */ } }, 1500).unref();
-                setTimeout(() => { try { process.kill(pid, "SIGKILL"); } catch (e) { /* çıkmış */ } }, 4000).unref();
+                setTimeout(() => { try { process.kill(pid, "SIGKILL"); } catch (e) { /* çıkmış */ } }, 3000).unref();
             }
             resolve(result);
         };
@@ -285,6 +297,10 @@ function mcpHandshake(entry, opts = {}) {
             return finish(false, "başlatılamadı: " + e.message);
         }
 
+        if (child.pid) {
+            liveChildren.add(child.pid);
+            child.on("exit", () => liveChildren.delete(child.pid));
+        }
         timer = setTimeout(() => finish(false, fmtMs(timeoutMs) + " içinde yanıt vermedi"), timeoutMs);
 
         child.on("error", (e) => finish(false, "başlatılamadı: " + (e.code || e.message)));
@@ -342,7 +358,7 @@ function classifyEntry(entry) {
     if (base === "uv" || base === "uvx") return "legacy-uv";
     if (base === "npx" || base === "npm") return "legacy-npx";
     if (args.some((a) => /gokai_mcp\.py$/.test(String(a)))) return "locked-python";
-    if (base === "node" && args.some((a) => /photoshop-mcp\/dist\/index\.js$/.test(String(a)))) return "locked-node";
+    if (base === "node" && args.some((a) => /\/(photoshop|video)-mcp\/node_modules\/.+\.js$/.test(String(a)))) return "locked-node";
     return "unknown";
 }
 
@@ -839,6 +855,22 @@ async function runDoctor(opts = {}) {
             }
         } else {
             add(G_AD, "info", "Yalnızca Photoshop Beta var — AppleScript sunucusu kullanılıyor (eklenti gerekmez)");
+        }
+    }
+
+    // Premiere Pro / After Effects eklentileri (yalnızca sunucusu eklenmişse)
+    if (gokaiEntries["GokAI Premiere Pro"]) {
+        if (exists(path.join(P.cepDir, "MCPBridgeCEP", "CSXS", "manifest.xml"))) {
+            add(G_AD, "ok", "Premiere Pro eklentisi kurulu (MCP Bridge)");
+        } else {
+            add(G_AD, "fail", "Premiere Pro eklentisi kurulu değil", path.join(P.cepDir, "MCPBridgeCEP"), FIX_CMD);
+        }
+    }
+    if (gokaiEntries["GokAI After Effects"]) {
+        if (exists(path.join(P.cepDir, "games.engine-room.ae-mcp", "node_modules", "ws", "package.json"))) {
+            add(G_AD, "ok", "After Effects eklentisi kurulu (AE MCP Bridge)");
+        } else {
+            add(G_AD, "fail", "After Effects eklentisi kurulu değil ya da eksik", path.join(P.cepDir, "games.engine-room.ae-mcp"), FIX_CMD);
         }
     }
 

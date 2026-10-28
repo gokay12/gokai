@@ -78,7 +78,7 @@ CEP_DIR="$HOME/Library/Application Support/Adobe/CEP/extensions"
 UXP_DIR="$HOME/Library/Application Support/Adobe/UXP"
 UDT_WS="$HOME/Library/Application Support/Adobe/Adobe UXP Developer Tool/plugins_workspace.json"
 
-step() { printf "\n\033[1;35m[GokAI]\033[0m \033[1m%s\033[0m\n" "$1"; }
+step() { printf "\n\033[1;38;5;208m[GokAI]\033[0m \033[1m%s\033[0m\n" "$1"; }
 ok()   { printf "  \033[32m✓\033[0m %s\n" "$1"; }
 skip() { printf "  \033[90m·\033[0m %s\n" "$1"; }
 warn() { printf "  \033[33m!\033[0m %s\n" "$1"; }
@@ -206,9 +206,9 @@ else
 fi
 
 # ---------------------------------------------------------- 3. CEP eklentileri ---
-step "3/8 CEP eklentileri (Illustrator / After Effects)"
+step "3/8 CEP eklentileri (Illustrator / Premiere Pro / After Effects)"
 FOUND=0
-for ext in com.mikechambers.ai com.mikechambers.ae; do
+for ext in com.mikechambers.ai com.mikechambers.ae MCPBridgeCEP games.engine-room.ae-mcp; do
   if [ -e "$CEP_DIR/$ext" ] || [ -L "$CEP_DIR/$ext" ]; then
     rm -rf "$CEP_DIR/$ext"; ok "kaldırıldı: $ext"; FOUND=1
   fi

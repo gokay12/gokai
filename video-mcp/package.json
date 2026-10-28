@@ -1,0 +1,11 @@
+{
+  "name": "gokai-video-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GokAI - sabitlenmis Premiere Pro ve After Effects MCP sunuculari",
+  "license": "MIT",
+  "dependencies": {
+    "@engine-room/after-effects-mcp": "0.5.1",
+    "adobe-premiere-pro-mcp": "1.2.11"
+  }
+}

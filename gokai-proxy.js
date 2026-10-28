@@ -51,7 +51,7 @@ const os = require("os");
 const { execFile } = require("child_process");
 const { Server } = require("socket.io");
 
-const VERSION = "2.0.1";
+const VERSION = "3.0.0";
 const PORT = parseInt(process.env.GOKAI_PORT || "3001", 10);
 const START_TIME = Date.now();
 

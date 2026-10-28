@@ -4,25 +4,32 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GokAI</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
+  /* GokAI v3 teması — "Alacakaranlık": gece moru gökyüzü, ufukta turuncu.
+     Renkler yalnızca burada tanımlı; marka rengi değişirse bu blok yeter. */
   :root {
-    --bg: #07090f;
-    --surface: rgba(255,255,255,.035);
-    --surface-hover: rgba(255,255,255,.055);
-    --border: rgba(255,255,255,.07);
-    --border-strong: rgba(255,255,255,.12);
-    --text: #eef1f7;
-    --muted: #7d8598;
-    --faint: #4a5163;
-    --ok: #30d98f;
-    --ok-dim: rgba(48,217,143,.12);
-    --wait: #f0a53c;
-    --wait-dim: rgba(240,165,60,.1);
-    --bad: #f4645f;
-    --bad-dim: rgba(244,100,95,.1);
-    --g1: #8b5cf6;
-    --g2: #22d3ee;
+    --bg: #0D0820;
+    --surface: rgba(176,150,255,.05);
+    --surface-hover: rgba(176,150,255,.085);
+    --border: rgba(190,170,255,.10);
+    --border-strong: rgba(190,170,255,.19);
+    --text: #F6F1FF;
+    --muted: #A99CCB;
+    --faint: #75699A;
+    --orange: #FF7A1A;
+    --orange-soft: #FFA552;
+    --violet: #6A35E8;
+    --violet-soft: #A98BFF;
+    --ok: #3DDC97;
+    --ok-dim: rgba(61,220,151,.12);
+    --wait: #FFBE55;
+    --wait-dim: rgba(255,190,85,.1);
+    --bad: #FF5D7A;
+    --bad-dim: rgba(255,93,122,.1);
     --radius: 20px;
+    --display: "Avenir Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --rounded: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, sans-serif;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; }
@@ -34,13 +41,15 @@
     overflow-x: hidden;
   }
 
-  /* ---- arka plan: mesh + grain ---- */
+  /* ---- arka plan: tepede mor, ufukta turuncu ışık + grain ---- */
   .mesh {
     position: fixed; inset: -20%;
     background:
-      radial-gradient(42% 38% at 18% 8%,  rgba(139,92,246,.20), transparent 70%),
-      radial-gradient(38% 34% at 85% 4%,  rgba(34,211,238,.13), transparent 70%),
-      radial-gradient(50% 44% at 55% 110%, rgba(139,92,246,.08), transparent 70%);
+      radial-gradient(38% 34% at 16% 10%, rgba(124,77,255,.30), transparent 70%),
+      radial-gradient(30% 28% at 86% 8%,  rgba(169,139,255,.13), transparent 70%),
+      radial-gradient(55% 20% at 50% 91%, rgba(255,122,26,.27), transparent 72%),
+      radial-gradient(80% 30% at 50% 96%, rgba(224,85,154,.17), transparent 75%),
+      linear-gradient(180deg, #0A0618 14%, #110A27 55%, #1A0D33 86%);
     filter: blur(8px);
     animation: drift 24s ease-in-out infinite alternate;
     pointer-events: none; z-index: 0;
@@ -66,16 +75,16 @@
     backdrop-filter: blur(24px);
     animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
   }
-  .logo {
-    width: 46px; height: 46px; border-radius: 13px; flex:none;
-    background: linear-gradient(135deg, var(--g1), var(--g2));
-    display:grid; place-items:center;
-    box-shadow: 0 10px 30px rgba(139,92,246,.4), inset 0 1px 0 rgba(255,255,255,.25);
+  .brand h1 { display:flex; align-items:center; gap:10px; line-height:1; color: var(--text); }
+  .wordmark { display:block; height: 27px; width: auto; }
+  /* "GokAI" sabit; rozet sürümden gelir (v3, v4 …) */
+  .ver {
+    font: 800 11.5px/1 var(--rounded); letter-spacing: .02em;
+    color: #fff; background: var(--violet);
+    padding: 4px 8px; border-radius: 100px;
+    box-shadow: 0 6px 16px rgba(106,53,232,.5), inset 0 1px 0 rgba(255,255,255,.22);
   }
-  .logo svg { width: 26px; height: 26px; }
-  .brand h1 { font-size: 21px; font-weight: 800; letter-spacing: -.03em; line-height:1; }
-  .brand h1 em { font-style: normal; background: linear-gradient(90deg, var(--g1), var(--g2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .brand p { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .brand p { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
 
   .spacer { flex: 1; }
 
@@ -84,40 +93,42 @@
     font-size: 13px; font-weight: 600;
     padding: 9px 15px; border-radius: 100px;
     border: 1px solid var(--border-strong);
-    background: rgba(0,0,0,.25);
+    background: rgba(8,4,20,.35);
     transition: all .4s;
     white-space: nowrap;
   }
   .health .hdot { width: 8px; height: 8px; border-radius: 50%; }
-  .health.ok   { color: var(--ok);   border-color: rgba(48,217,143,.35); }
+  .health.ok   { color: var(--ok);   border-color: rgba(61,220,151,.35); }
   .health.ok .hdot { background: var(--ok); animation: pulse-ok 2.2s infinite; }
-  .health.wait { color: var(--wait); border-color: rgba(240,165,60,.3); }
+  .health.wait { color: var(--wait); border-color: rgba(255,190,85,.3); }
   .health.wait .hdot { background: var(--wait); }
-  .health.bad  { color: var(--bad);  border-color: rgba(244,100,95,.35); }
+  .health.bad  { color: var(--bad);  border-color: rgba(255,93,122,.35); }
   .health.bad .hdot { background: var(--bad); }
 
   .iconbtn {
-    appearance:none; border:1px solid var(--border-strong); background: rgba(0,0,0,.25);
+    appearance:none; border:1px solid var(--border-strong); background: rgba(8,4,20,.35);
     width: 40px; height: 40px; border-radius: 12px; cursor: pointer;
     display:grid; place-items:center; color: var(--muted);
     transition: all .25s;
   }
-  .iconbtn:hover { color: var(--text); border-color: rgba(139,92,246,.55); background: rgba(139,92,246,.12); transform: translateY(-1px); }
+  .iconbtn:hover { color: var(--text); border-color: rgba(169,139,255,.55); background: rgba(106,53,232,.18); transform: translateY(-1px); }
   .iconbtn svg { width: 17px; height: 17px; }
   .iconbtn.spinning svg { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  button:focus-visible { outline: 2px solid var(--orange-soft); outline-offset: 3px; }
 
   /* ---- kişisel selamlama ---- */
-  .hero { margin: 30px 0 4px; padding-left: 4px; animation: rise .55s cubic-bezier(.2,.8,.2,1) both; animation-delay:.04s; }
+  .hero { margin: 32px 0 4px; padding-left: 4px; animation: rise .55s cubic-bezier(.2,.8,.2,1) both; animation-delay:.04s; }
   .hero h2 {
-    font-size: 30px; font-weight: 750; letter-spacing: -.035em; line-height: 1.15;
+    font-family: var(--display);
+    font-size: 31px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15;
   }
   .hero h2 .nm {
-    background: linear-gradient(90deg, var(--g1), var(--g2));
+    background: linear-gradient(90deg, var(--orange-soft), #F27A8C 55%, var(--violet-soft));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .hero p { color: var(--muted); font-size: 14px; margin-top: 7px; }
-  @media (max-width: 640px) { .hero h2 { font-size: 24px; } }
+  @media (max-width: 640px) { .hero h2 { font-size: 25px; } }
 
   /* ---- bölümler ---- */
   section { margin-top: 34px; animation: rise .6s cubic-bezier(.2,.8,.2,1) both; }
@@ -127,13 +138,13 @@
     color: var(--faint); margin-bottom: 14px; padding-left: 4px;
     display:flex; align-items:center; gap:10px;
   }
-  .sec-title::after { content:""; flex:1; height:1px; background: linear-gradient(90deg, var(--border), transparent); order: 1; }
+  .sec-title::after { content:""; flex:1; height:1px; background: linear-gradient(90deg, rgba(169,139,255,.28), transparent); order: 1; }
   .sec-title .linkbtn {
     order: 2; appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
     font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--muted);
     transition: color .2s;
   }
-  .sec-title .linkbtn:hover { color: var(--text); }
+  .sec-title .linkbtn:hover { color: var(--orange-soft); }
   .sec-title .linkbtn:disabled { color: var(--faint); cursor: default; }
 
   .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 16px; }
@@ -151,7 +162,7 @@
   .card:hover { transform: translateY(-3px); background: var(--surface-hover); border-color: var(--border-strong); }
   .card::before {
     content:""; position:absolute; inset:0 0 auto 0; height:1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+    background: linear-gradient(90deg, transparent, rgba(214,196,255,.16), transparent);
   }
   .card.launchable { cursor: pointer; user-select: none; }
   .card.launchable::after {
@@ -163,10 +174,10 @@
   }
   .card.launchable:hover::after { opacity: 1; }
   .card.launchable:active { transform: translateY(-1px) scale(.995); }
-  .card.opening::after { content: "açılıyor…"; opacity: 1; color: var(--g2); }
+  .card.opening::after { content: "açılıyor…"; opacity: 1; color: var(--orange-soft); }
 
-  .card.ok { border-color: rgba(48,217,143,.28); }
-  .card.ok:hover { border-color: rgba(48,217,143,.45); }
+  .card.ok { border-color: rgba(61,220,151,.26); }
+  .card.ok:hover { border-color: rgba(61,220,151,.42); }
 
   .card .head { display:flex; align-items:center; gap: 13px; }
   .tile {
@@ -178,7 +189,9 @@
   .tile.ps  { background:#001d33; color:#31a8ff; border:1px solid rgba(49,168,255,.3); }
   .tile.ai  { background:#2b1700; color:#ff9a00; border:1px solid rgba(255,154,0,.3); }
   .tile.id  { background:#3b0219; color:#ff3366; border:1px solid rgba(255,51,102,.3); }
-  .tile.sys { background:#131a2c; color:#a5b4fc; border:1px solid rgba(165,180,252,.22); font-size:19px; }
+  .tile.sys { background: rgba(255,122,26,.1); color: var(--orange-soft); border:1px solid rgba(255,165,82,.26); font-size:19px; }
+  .tile.gk  { background: linear-gradient(180deg, #7C4DFF, #3A16A6); border:1px solid rgba(255,255,255,.12); box-shadow: 0 8px 20px rgba(106,53,232,.35), inset 0 1px 0 rgba(255,255,255,.2); }
+  .tile.gk svg { width: 27px; height: 27px; }
   .card .name { font-weight: 700; font-size: 15.5px; letter-spacing:-.01em; }
   .card .kind { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 
@@ -196,10 +209,10 @@
   .state.bad  { color: var(--bad);  background: var(--bad-dim); }
   .state.bad .dot { background: var(--bad); }
   @keyframes pulse-ok {
-    0% { box-shadow: 0 0 0 0 rgba(48,217,143,.45); } 70% { box-shadow: 0 0 0 8px rgba(48,217,143,0); } 100% { box-shadow: 0 0 0 0 rgba(48,217,143,0); }
+    0% { box-shadow: 0 0 0 0 rgba(61,220,151,.45); } 70% { box-shadow: 0 0 0 8px rgba(61,220,151,0); } 100% { box-shadow: 0 0 0 0 rgba(61,220,151,0); }
   }
   @keyframes pulse-wait {
-    0% { box-shadow: 0 0 0 0 rgba(240,165,60,.35); } 70% { box-shadow: 0 0 0 7px rgba(240,165,60,0); } 100% { box-shadow: 0 0 0 0 rgba(240,165,60,0); }
+    0% { box-shadow: 0 0 0 0 rgba(255,190,85,.35); } 70% { box-shadow: 0 0 0 7px rgba(255,190,85,0); } 100% { box-shadow: 0 0 0 0 rgba(255,190,85,0); }
   }
   .lastseen { color: var(--faint); font-size: 11.5px; }
 
@@ -207,14 +220,14 @@
     max-height: 0; opacity: 0; overflow: hidden;
     transition: max-height .45s cubic-bezier(.2,.8,.2,1), opacity .35s, margin .35s;
     margin-top: 0;
-    font-size: 12.5px; line-height: 1.65; color: #c9b58a;
+    font-size: 12.5px; line-height: 1.65; color: #E9D3AA;
   }
   .card.show-hint .hint { max-height: 180px; opacity: 1; margin-top: 15px; }
   .hint .inner {
     padding: 12px 14px; border-radius: 12px;
-    background: var(--wait-dim); border: 1px solid rgba(240,165,60,.16);
+    background: var(--wait-dim); border: 1px solid rgba(255,190,85,.17);
   }
-  .hint b { color: #ecd9ac; font-weight: 650; }
+  .hint b { color: #FFE5B8; font-weight: 650; }
   .meta { color: var(--faint); font-size: 12px; margin-top: 15px; line-height: 1.7; }
 
   /* ---- tanı ---- */
@@ -240,15 +253,15 @@
   .doc-item.info .mk { color: var(--faint); }
   .doc-item.fail .tt { font-weight: 650; }
   .doc-item .dt { color: var(--muted); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .doc-item .fx { color: var(--g2); font-size: 12.5px; overflow-wrap: anywhere; }
+  .doc-item .fx { color: var(--violet-soft); font-size: 12.5px; overflow-wrap: anywhere; }
   .doc-fix {
     margin-top: 16px; padding: 13px 15px; border-radius: 12px;
-    background: var(--bad-dim); border: 1px solid rgba(244,100,95,.25);
-    color: #f5b8b5; font-size: 12.5px; line-height: 1.6;
+    background: var(--bad-dim); border: 1px solid rgba(255,93,122,.27);
+    color: #FFC3CE; font-size: 12.5px; line-height: 1.6;
   }
   .doc-fix code {
     display: block; margin: 9px 0 10px; padding: 9px 11px; border-radius: 8px;
-    background: rgba(0,0,0,.3); color: #ffd9d7;
+    background: rgba(0,0,0,.3); color: #FFE2E8;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
     overflow-wrap: anywhere; user-select: all;
   }
@@ -258,8 +271,8 @@
     appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
     font: inherit; font-size: 12px; color: var(--muted); transition: color .2s;
   }
-  .textbtn:hover { color: var(--text); }
-  .doc-fix .textbtn { color: #ffd9d7; font-weight: 600; }
+  .textbtn:hover { color: var(--orange-soft); }
+  .doc-fix .textbtn { color: #FFE2E8; font-weight: 600; }
 
   /* ---- alt bilgi ---- */
   footer {
@@ -267,20 +280,24 @@
     color: var(--faint); font-size: 12px; padding: 0 6px; flex-wrap: wrap; gap: 10px;
   }
   footer .l { display:flex; align-items:center; gap:8px; }
-  footer .mark { width:16px; height:16px; border-radius:5px; background: linear-gradient(135deg, var(--g1), var(--g2)); opacity:.7; }
+  footer .mark { width:15px; height:15px; }
 
   .banner {
     display:none; margin-top: 34px;
     padding: 18px 22px; border-radius: var(--radius);
-    background: var(--bad-dim); border: 1px solid rgba(244,100,95,.3);
-    color: #f5b8b5; font-size: 13.5px; line-height: 1.7;
+    background: var(--bad-dim); border: 1px solid rgba(255,93,122,.3);
+    color: #FFC3CE; font-size: 13.5px; line-height: 1.7;
     animation: rise .4s both;
   }
-  .banner b { color: #ffd9d7; }
+  .banner b { color: #FFE2E8; }
   body.proxy-down .banner { display: block; }
   body.proxy-down .grid, body.proxy-down .sec-title { opacity: .35; filter: saturate(.4); pointer-events: none; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 
   @media (max-width: 640px) {
     .app { padding: 20px 14px 40px; }
@@ -290,19 +307,22 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="gk-moon" x1="0" y1="10" x2="0" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB662"/><stop offset="1" stop-color="#FF6A1A"/></linearGradient></defs><symbol id="gk-mark" viewBox="10 10 80 80"><path fill="url(#gk-moon)" d="M69.392 15.015A40 40 0 1 0 89.994 50.698A32.784 32.784 0 1 1 69.392 15.015Z"/><path fill="url(#gk-moon)" d="M62 38.698H88.37A40 40 0 0 1 89.994 50.698H62A6 6 0 0 1 62 38.698Z"/></symbol></svg>
 <div class="mesh"></div>
 <div class="grain"></div>
 
 <div class="app">
   <div class="appbar">
-    <div class="logo">
-      <svg viewBox="0 0 24 24" fill="none">
-        <path d="M12 3a9 9 0 1 0 9 9h-4.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
-        <circle cx="16.5" cy="12" r="2.1" fill="#fff"/>
-      </svg>
-    </div>
     <div class="brand">
-      <h1>Gok<em>AI</em></h1>
+      <h1><svg class="wordmark" viewBox="-1 -4 386.68 107" role="img" aria-label="GokAI"><path transform="translate(-12.875 -14.375) scale(1.288)" fill="url(#gk-moon)" d="M69.39 15.02A40 40 0 1 0 89.99 50.7A32.78 32.78 0 1 1 69.39 15.02Z"/>
+  <path transform="translate(-12.875 -14.375) scale(1.288)" fill="url(#gk-moon)" d="M62 38.7H88.37A40 40 0 0 1 89.99 50.7H62A6 6 0 0 1 62 38.7Z"/>
+  <path fill-rule="evenodd" fill="currentColor" d="M111 64a37.5 37.5 0 1 0 75 0a37.5 37.5 0 1 0 -75 0ZM127 64a21.5 21.5 0 1 1 43 0a21.5 21.5 0 1 1 -43 0Z"/>
+  <path fill="currentColor" d="M199 0H215V100H199Z"/>
+  <path fill="currentColor" d="M237.25 28H256.75L207 99.51V71.49Z"/>
+  <path fill="currentColor" d="M240.32 100H257.68L238.08 53.3H220.72Z"/>
+  <path fill-rule="evenodd" fill="currentColor" d="M266.68 100L312.68 -3L358.68 100ZM284.2 100L312.68 36.24L341.15 100Z"/>
+  <path fill="currentColor" d="M281.86 66H343.49V80H275.61Z"/>
+  <path fill="currentColor" d="M368.68 0H384.68V100H368.68Z"/></svg><span class="ver" id="ver-badge" hidden></span></h1>
       <p>Adobe MCP Köprüsü</p>
     </div>
     <div class="spacer"></div>
@@ -368,7 +388,7 @@
     <div class="grid">
       <div class="card" id="card-proxy">
         <div class="head">
-          <div class="tile sys">⇄</div>
+          <div class="tile gk"><svg aria-hidden="true"><use href="#gk-mark"/></svg></div>
           <div><div class="name">GokAI Servisi</div><div class="kind">Arka plan köprüsü</div></div>
         </div>
         <div class="staterow">
@@ -409,7 +429,7 @@
   </section>
 
   <footer>
-    <div class="l"><span class="mark"></span> GokAI <span id="ver">v—</span><span id="installed"></span></div>
+    <div class="l"><svg class="mark" aria-hidden="true"><use href="#gk-mark"/></svg> GokAI <span id="ver">v—</span><span id="installed"></span></div>
     <div>canlı · her 2 saniyede yenilenir</div>
   </footer>
 </div>
@@ -481,6 +501,10 @@ async function tick() {
     document.getElementById("meta-proxy").innerHTML =
       "Port <b>" + s.port + "</b> · çalışma süresi " + fmtUptime(s.uptimeSec);
     document.getElementById("ver").textContent = "v" + s.version;
+    // Logodaki rozet ana sürümü gösterir: 3.0.0 → v3
+    const badge = document.getElementById("ver-badge");
+    badge.textContent = "v" + String(s.version).split(".")[0];
+    badge.hidden = false;
     document.getElementById("installed").textContent =
       s.install && s.install.installedAt
         ? " · kurulum " + new Date(s.install.installedAt).toLocaleDateString("tr-TR")
