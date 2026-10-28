@@ -17,6 +17,9 @@ const PY = SB + "/venv/bin/python";
 const PORT = parseInt(process.env.TPORT || "3907", 10);
 const URL = "http://127.0.0.1:" + PORT;
 const SBHOME = H;
+// Premiere köprü klasörü: gerçek /tmp/premiere-mcp-bridge'e dokunmamak için geçici klasör (proxy env'den okur)
+const fs = require("fs");
+process.env.PREMIERE_TEMP_DIR = fs.mkdtempSync(path.join(require("os").tmpdir(), "gokai-pr-"));
 
 let passed = 0, failed = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -145,6 +148,26 @@ class Mcp {
     check("yabancı Host başlığı reddediliyor (DNS rebinding)", evilHost.status === 403);
     const panel = await get("/");
     check("panel sayfası sunuluyor", panel.status === 200 && /GokAI/.test(panel.body));
+
+    console.log("\n== 1b. Premiere / After Effects: kendi köprülerinden durum ==");
+    const beat = (t) => fs.writeFileSync(path.join(process.env.PREMIERE_TEMP_DIR, "bridge-heartbeat.json"), JSON.stringify({ t, started: true }));
+    beat(Date.now());
+    let sv = (await get("/status")).json;
+    check("Premiere: taze heartbeat → bağlı", sv.apps.premiere && sv.apps.premiere.connected === true, JSON.stringify(sv.apps.premiere));
+    beat(Date.now() - 60000);
+    sv = (await get("/status")).json;
+    check("Premiere: eski heartbeat → bağlı değil, son görülme korunuyor", sv.apps.premiere.connected === false && sv.apps.premiere.lastSeen > 0);
+    // After Effects panelini taklit et: /health yanıtlar, portunu panel gibi dosyaya yazar
+    const aePanel = http.createServer((q, r) => { r.setHeader("content-type", "application/json"); r.end(JSON.stringify({ ok: true, bundleLoaded: true })); });
+    await new Promise((r) => aePanel.listen(0, "127.0.0.1", r));
+    fs.mkdirSync(path.join(SBHOME, ".engineroom-ae-mcp"), { recursive: true });
+    fs.writeFileSync(path.join(SBHOME, ".engineroom-ae-mcp", "port"), String(aePanel.address().port));
+    sv = (await get("/status")).json;
+    check("After Effects: panel /health yanıtlıyor → bağlı", sv.apps.aftereffects && sv.apps.aftereffects.connected === true, JSON.stringify(sv.apps.aftereffects));
+    await new Promise((r) => aePanel.close(r));
+    sv = (await get("/status")).json;
+    check("After Effects: panel kapandı (port dosyası kaldı) → bağlı değil", sv.apps.aftereffects.connected === false && sv.apps.aftereffects.lastSeen > 0);
+    fs.rmSync(path.join(SBHOME, ".engineroom-ae-mcp"), { recursive: true, force: true });
 
     console.log("\n== 2. Komut gidiş-dönüş (gerçek MCP sunucusu → proxy → eklenti) ==");
     const ai = new Mcp("illustrator");

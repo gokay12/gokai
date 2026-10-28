@@ -24,7 +24,7 @@ const path = require("path");
 const http = require("http");
 const { spawn, execFile } = require("child_process");
 
-const DOCTOR_VERSION = "3.0.0";
+const DOCTOR_VERSION = "3.0.1";
 const SERVICE_LABEL = "com.gokai.proxy";
 // Kurulum betiği yeni sürümü önce hazırlayıp dener, sonra yerine koyar; bu yüzden
 // onarım için de güvenle çalıştırılabilir (reset.sh'ın aksine önce silmez).
@@ -147,6 +147,8 @@ function stablePhotoshopApps() {
 const APP_PROCESS_RE = {
     photoshop: /\/Adobe Photoshop[^/]*\.app\/Contents\/MacOS\/Adobe Photoshop[^/]*$/m,
     illustrator: /\/Adobe Illustrator[^/]*\.app\/Contents\/MacOS\/Adobe Illustrator$/m,
+    premiere: /\/Adobe Premiere Pro[^/]*\.app\/Contents\/MacOS\/Adobe Premiere Pro[^/]*$/m,
+    aftereffects: /\/Adobe After Effects[^/]*\.app\/Contents\/MacOS\/After Effects$/m,
 };
 
 async function runningApps() {

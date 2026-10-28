@@ -157,12 +157,15 @@ Bağlantının kendisi için eklenenler:
 - **Canlı durum kartları** — her Adobe uygulaması ve sistem bileşeni için
   ("Illustrator kapalı" ile "eklenti bağlı değil" ayrı gösterilir).
 - **Tanı** — doktorun bulduğu sorunlar ve düzeltme komutu (kopyala düğmesiyle).
-- **Çift tıkla → aç** — Photoshop, Illustrator ve Claude Desktop kartlarına çift
+- **Premiere Pro / After Effects kartları** — yalnızca o uygulama kuruluysa görünür;
+  bağlantıyı kendi köprülerinden okur (Premiere panelinin `bridge-heartbeat.json`
+  dosyası, After Effects panelinin `/health` yanıtı).
+- **Çift tıkla → aç** — Adobe uygulamaları ve Claude Desktop kartlarına çift
   tıklayınca uygulama açılır.
 - **Yeniden başlat** düğmesi — proxy'yi sıfırlar; eklentiler kendiliğinden geri bağlanır.
 
 > Uygulama açma ve yeniden başlatma istekleri yalnızca panelin kendi kaynağından
-> kabul edilir; yalnızca sabit beyaz listedeki üç uygulama açılabilir.
+> kabul edilir; yalnızca sabit beyaz listedeki beş uygulama açılabilir.
 
 ## Bileşenler
 

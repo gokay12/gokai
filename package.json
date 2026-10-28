@@ -1,6 +1,6 @@
 {
   "name": "gokai-proxy",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "GokAI - Adobe MCP koprusu + durum paneli",
   "main": "gokai-proxy.js",
   "license": "MIT",

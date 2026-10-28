@@ -32,7 +32,7 @@
 # yalnızca ana kabukta ve yalnızca bir kez çalışır.
 set -euo pipefail
 
-GOKAI_VERSION="3.0.0"
+GOKAI_VERSION="3.0.1"
 
 # ------------------------------------------------- sabitlenmiş sürümler ---
 # Buradaki her şey bilinçli olarak sabit. Yükseltmek için README'deki

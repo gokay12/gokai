@@ -51,7 +51,7 @@ const os = require("os");
 const { execFile } = require("child_process");
 const { Server } = require("socket.io");
 
-const VERSION = "3.0.0";
+const VERSION = "3.0.1";
 const PORT = parseInt(process.env.GOKAI_PORT || "3001", 10);
 const START_TIME = Date.now();
 
@@ -83,6 +83,8 @@ try {
 const APP_PROCESS_RE = (doctor && doctor.APP_PROCESS_RE) || {
     photoshop: /\/Adobe Photoshop[^/]*\.app\/Contents\/MacOS\/Adobe Photoshop[^/]*$/m,
     illustrator: /\/Adobe Illustrator[^/]*\.app\/Contents\/MacOS\/Adobe Illustrator$/m,
+    premiere: /\/Adobe Premiere Pro[^/]*\.app\/Contents\/MacOS\/Adobe Premiere Pro[^/]*$/m,
+    aftereffects: /\/Adobe After Effects[^/]*\.app\/Contents\/MacOS\/After Effects$/m,
 };
 
 // Beklenmeyen bir hata bağlı eklentileri düşürmesin: kaydet, çalışmaya devam et.
@@ -446,7 +448,7 @@ function readInstallInfo() {
 // başlatamaz, bu yüzden proxy yapıyor. Güvenlik: sabit beyaz liste (kullanıcıdan
 // gelen isim/yol asla `open`'a geçmez) + Origin kontrolü (kötü niyetli bir web
 // sayfası localhost'a POST atıp uygulama açtıramasın).
-const LAUNCHABLE = ["photoshop", "illustrator", "claude"];
+const LAUNCHABLE = ["photoshop", "illustrator", "premiere", "aftereffects", "claude"];
 
 // Uygulama yollarını dosya sisteminden çöz. Kabuk kullanmıyoruz: "Adobe
 // Photoshop 2026" gibi boşluklu klasör adları glob'da bozuluyor.
@@ -473,9 +475,13 @@ function resolveApps() {
 
     const ps = pick((e) => e.startsWith("Adobe Photoshop"));
     const ai = pick((e) => e.startsWith("Adobe Illustrator"));
+    const pr = pick((e) => e.startsWith("Adobe Premiere Pro"));
+    const ae = pick((e) => e.startsWith("Adobe After Effects"));
     const cl = pick((e) => e === "Claude.app");
     if (ps) found.photoshop = ps;
     if (ai) found.illustrator = ai;
+    if (pr) found.premiere = pr;
+    if (ae) found.aftereffects = ae;
     if (cl) found.claude = cl;
     return found;
 }
@@ -500,8 +506,37 @@ function runDoctorOnce() {
     return doctorRunning;
 }
 
+// --- Premiere Pro / After Effects -----------------------------------------------
+// Bu ikisi GokAI proxy'sine bağlanmaz, kendi köprüleri var; durumlarını o
+// köprülerin bıraktığı izlerden okuyoruz.
+// Premiere paneli 250 ms'de bir heartbeat yazar (MCP sunucusu 2,5 sn'den eskisini "panel yok" sayar).
+const PREMIERE_BRIDGE_DIR = process.env.PREMIERE_TEMP_DIR || "/tmp/premiere-mcp-bridge";
+function premiereBridge() {
+    try {
+        const b = JSON.parse(fs.readFileSync(path.join(PREMIERE_BRIDGE_DIR, "bridge-heartbeat.json"), "utf8"));
+        return { connected: b.started === true && Date.now() - b.t < 5000, lastSeen: b.t || null };
+    } catch (e) {
+        return { connected: false, lastSeen: null };
+    }
+}
+// After Effects paneli bağlandığı portu ~/.engineroom-ae-mcp/port dosyasına yazar ve /health yanıtlar.
+function aeBridgeUp() {
+    return new Promise((resolve) => {
+        let port = 0;
+        try { port = parseInt(fs.readFileSync(path.join(os.homedir(), ".engineroom-ae-mcp", "port"), "utf8"), 10); } catch (e) {}
+        if (!(port > 0 && port < 65536)) return resolve(false);
+        const req = http.get({ host: "127.0.0.1", port, path: "/health", timeout: 800 }, (r) => {
+            let b = "";
+            r.on("data", (c) => { b += c; });
+            r.on("end", () => { try { resolve(JSON.parse(b).ok === true); } catch (e) { resolve(false); } });
+        });
+        req.on("timeout", () => { req.destroy(); resolve(false); });
+        req.on("error", () => resolve(false));
+    });
+}
+
 app.get("/status", async (req, res) => {
-    const running = await runningApps();
+    const [running, aeUp] = await Promise.all([runningApps(), aeBridgeUp()]);
     const apps = {};
     for (const name of ["photoshop", "illustrator"]) {
         const clients = connectedCount(name);
@@ -512,6 +547,10 @@ app.get("/status", async (req, res) => {
             running: !!running[name],
         };
     }
+    const pr = premiereBridge();
+    apps.premiere = { connected: pr.connected, lastSeen: pr.lastSeen, running: !!running.premiere };
+    if (aeUp) lastSeen.aftereffects = Date.now();
+    apps.aftereffects = { connected: aeUp, lastSeen: lastSeen.aftereffects || null, running: !!running.aftereffects };
     res.json({
         ok: true,
         version: VERSION,
